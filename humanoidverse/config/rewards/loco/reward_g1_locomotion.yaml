@@ -9,7 +9,7 @@ rewards:
   only_positive_rewards: False
   reward_scales:
       tracking_lin_vel: 1.0
-      tracking_ang_vel: 2.0
+      tracking_ang_vel: 0.5
       penalty_lin_vel_z: -2.0
       penalty_ang_vel_xy: -1.0
       penalty_orientation: -1.0
@@ -25,13 +25,11 @@ rewards:
       # limits_dof_vel: -5.0
       # limits_torque: -0.1
       feet_air_time: 1.0
-      base_height: -100.0
+      base_height: -1.0
       penalty_feet_height: -5.
-      penalty_obstacle_collision: -10.0
       # termination: -500.0
       # penalty_in_the_air: -100.0
       # feet_max_height_for_this_air: -100.0
-      goal_reached: 50.0
 
 
 
@@ -47,7 +45,7 @@ rewards:
   feet_height_target: 0.2
   locomotion_max_contact_force: 200.0
   desired_feet_max_height_for_this_air: 0.2
-  desired_base_height: 0.98
+  desired_base_height: 0.75
 
   reward_penalty_curriculum: False
   reward_initial_penalty_scale : 1.0
@@ -73,6 +71,5 @@ rewards:
     "limits_torque",
     "termination",
     "feet_air_time",
-    "feet_max_height_for_this_air",
-    "penalty_obstacle_collision"]
+    "feet_max_height_for_this_air"]
 

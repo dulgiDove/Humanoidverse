@@ -141,6 +141,7 @@ class Genesis(BaseSimulator):
         self.num_bodies = len(self.body_names)                # = len(self.rigid_solver.links) - 1
         self.dof_names = dof_names_list
         self.num_dof = len(dof_names_list)                    # = len(self.rigid_solver.joints) - 2
+        self._body_list = [link.name for link in self.robot.links]
 
     # ----- Environment Creation Methods -----
 
@@ -156,6 +157,44 @@ class Genesis(BaseSimulator):
         """
         # build
         self.num_envs = num_envs
+        self.cam = self.scene.add_camera(
+            res=(1280, 720),
+            pos=(3.0, -3.0, 2.5),
+            lookat=(0.0, 0.0, 0.8),
+            fov=40,
+            GUI=False,
+        )
+
+        # 장애물 시각화 마커 (빨간 원통) - 이미 있는 obstacles와 별도로 시각 전용
+        self.obstacle_markers = []
+        for i in range(3):
+            marker = self.scene.add_entity(
+                gs.morphs.Cylinder(
+                    radius=0.31,
+                    height=1.52,
+                    pos=(999.0 + i, 999.0, 0.76),
+                    fixed=True,
+                    collision=False,  # 물리 충돌 없음, 시각만
+                ),
+                surface=gs.surfaces.Default(
+                    color=(1.0, 0.2, 0.2, 0.7),  # 빨강, 반투명
+                ),
+            )
+            self.obstacle_markers.append(marker)
+
+        # 목표 위치 마커 (초록 구)
+        self.target_marker = self.scene.add_entity(
+            gs.morphs.Sphere(
+                radius=0.3,
+                pos=(999.0, 999.0, 0.3),
+                fixed=True,
+                collision=False,
+            ),
+            surface=gs.surfaces.Default(
+                color=(0.2, 1.0, 0.2, 0.8),  # 초록
+            ),
+        )
+
         self.scene.build(n_envs=num_envs)
         self.env_origins = env_origins
         self.base_init_state = base_init_state
@@ -301,15 +340,7 @@ class Genesis(BaseSimulator):
             set_env_ids (tensor): Tensor of environment IDs where states will be set.
             root_states (tensor): New root states to apply.
         """
-        root_states = torch.cat(
-            [
-                self.base_pos,
-                self.base_quat,
-                self.base_lin_vel,
-                self.base_ang_vel,
-            ], dim=-1
-        )
-        root_states = self.robot_root_states[set_env_ids]
+        root_states = self.robot_root_states[set_env_ids] 
 
         base_pos = root_states[..., :3]
         base_quat = root_states[..., [6, 3, 4, 5]]
@@ -354,10 +385,23 @@ class Genesis(BaseSimulator):
         )
 
     def simulate_at_each_physics_step(self):
-        """
-        Advances the simulation by a single physics step.
-        """
         self.scene.step()
+        if getattr(self, 'is_recording', False):
+            # render_counter로 제어 스텝에 1번만 렌더
+            self._render_counter = getattr(self, '_render_counter', 0) + 1
+            if self._render_counter % self.sim_cfg.sim.control_decimation == 0:
+                obot_pos = self.robot.get_pos()[0].cpu().numpy()
+
+                if hasattr(self, 'target_pos_for_cam'):
+                    tx, ty = self.target_pos_for_cam
+                else:
+                    tx, ty = robot_pos[0], robot_pos[1]
+
+                self.cam.set_pose(
+                    pos=(tx, ty, 8.0),
+                    lookat=(robot_pos[0], robot_pos[1], robot_pos[2] + 0.8),
+                )
+                self.cam.render()
 
     # ----- Viewer Setup and Rendering Methods -----
 
@@ -380,3 +424,15 @@ class Genesis(BaseSimulator):
     def dof_state(self):
         # This will always use the latest dof_pos and dof_vel
         return torch.cat([self.dof_pos[..., None], self.dof_vel[..., None]], dim=-1)
+
+
+    def start_recording(self, filename='eval_video.mp4'):
+        self.is_recording = True
+        self.cam.start_recording()
+        logger.info(f"Recording started: {filename}")
+        self._record_filename = filename
+
+    def stop_recording(self):
+        self.is_recording = False
+        self.cam.stop_recording(save_to_filename=self._record_filename, fps=50)
+        logger.info(f"Recording saved: {self._record_filename}")

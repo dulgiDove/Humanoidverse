@@ -180,7 +180,38 @@ def main(override_config: OmegaConf):
         # export_policy_and_estimator_as_onnx(algo.inference_model, exported_policy_path, exported_onnx_name, example_obs_dict)
         logger.info(f'Exported policy as onnx to: {os.path.join(exported_policy_path, exported_onnx_name)}')
 
-    algo.evaluate_policy()
+    MAX_STEPS = 1500  # 약 30초 영상
+
+    # 1. eval 준비 먼저
+    algo._create_eval_callbacks()
+    algo._pre_evaluate_policy()
+
+    # 2. 리셋 후 강제 resample
+    eval_policy = algo._get_inference_policy()
+    obs_dict = env.reset_all()
+    all_envs = torch.arange(env.num_envs, device=device)
+    env._resample_target(all_envs)
+    env._resample_obstacles(all_envs)
+
+    # 3. 리셋 완료 후 녹화 시작
+    env.simulator.start_recording(filename=f'eval_stage3_ckpt{ckpt_num}.mp4')
+
+    init_actions = torch.zeros(env.num_envs, algo.num_act, device=device)
+    actor_state = {
+        "obs": obs_dict,
+        "actions": init_actions,
+        "done_indices": [],
+        "stop": False
+    }
+
+    for step in range(MAX_STEPS):
+        actor_state["step"] = step
+        actions = eval_policy(actor_state["obs"]['actor_obs'])
+        actor_state["actions"] = actions
+        actor_state = algo.env_step(actor_state)
+
+    env.simulator.stop_recording()
+    logger.info("녹화 완료!")
 
 
 if __name__ == "__main__":

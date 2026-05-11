@@ -32,6 +32,12 @@ class LeggedRobotLocomotion(LeggedRobotBase):
             (self.num_envs, 4), dtype=torch.float32, device=self.device
         )
         self.command_ranges = self.config.locomotion_command_ranges
+        self.target_pos = torch.zeros((self.num_envs, 2), dtype=torch.float32, device=self.device)
+        # Stage3: 장애물 버퍼
+        self.obstacle_pos = torch.zeros((self.num_envs, 3, 2), dtype=torch.float32, device=self.device)
+        self.obstacle_radius = 0.3
+        self.num_scan_rays = 36
+        self.lidar_max_range = 5.0
 
     def _setup_simulator_control(self):
         self.simulator.commands = self.commands
@@ -46,14 +52,39 @@ class LeggedRobotLocomotion(LeggedRobotBase):
         # commands
         if not self.is_evaluating:
             env_ids = (self.episode_length_buf % int(self.config.locomotion_command_resampling_time / self.dt)==0).nonzero(as_tuple=False).flatten()
-            self._resample_commands(env_ids)
+            #self._resample_commands(env_ids)
+        robot_xy = self.simulator.robot_root_states[:, :2]
+        to_target = self.target_pos - robot_xy
+        target_heading = torch.atan2(to_target[:, 1], to_target[:, 0])
+        self.commands[:, 3] = target_heading
+        self.commands[:, 0] = 1.0
+        self.commands[:, 1] = 0.0 
         forward = quat_apply(self.base_quat, self.forward_vec)
         heading = torch.atan2(forward[:, 1], forward[:, 0])
         self.commands[:, 2] = torch.clip(
-            0.5 * wrap_to_pi(self.commands[:, 3] - heading), 
+            3.0 * wrap_to_pi(self.commands[:, 3] - heading), 
             self.command_ranges["ang_vel_yaw"][0], 
             self.command_ranges["ang_vel_yaw"][1]
         )
+        dist = torch.norm(to_target, dim=1)
+        reached = (dist < 0.5).nonzero(as_tuple=False).flatten()
+        if len(reached) > 0:
+            logger.info(f"[GOAL REACHED] env {reached.tolist()} | dist: {dist[reached].tolist()}")
+            self._resample_target(reached)
+            if self.num_envs == 1:
+                self._resample_obstacles(reached)
+
+        if self.num_envs == 1:
+            tx = self.target_pos[0, 0].item()
+            ty = self.target_pos[0, 1].item()
+            self.simulator.target_pos_for_cam = (tx, ty)
+
+    def _resample_target(self, env_ids):
+        robot_pos = self.simulator.robot_root_states[env_ids, :2]
+        rand_dist = torch_rand_float(3.0, 8.0, (len(env_ids), 1), device=self.device).squeeze(1)
+        rand_angle = torch_rand_float(-3.14159, 3.14159, (len(env_ids), 1), device=self.device).squeeze(1)
+        self.target_pos[env_ids, 0] = robot_pos[:, 0] + rand_dist * torch.cos(rand_angle)
+        self.target_pos[env_ids, 1] = robot_pos[:, 1] + rand_dist * torch.sin(rand_angle)
 
     def _resample_commands(self, env_ids):
         self.commands[env_ids, 0] = torch_rand_float(self.command_ranges["lin_vel_x"][0], self.command_ranges["lin_vel_x"][1], (len(env_ids), 1), device=str(self.device)).squeeze(1)
@@ -66,8 +97,29 @@ class LeggedRobotLocomotion(LeggedRobotBase):
 
     def _reset_tasks_callback(self, env_ids):
         super()._reset_tasks_callback(env_ids)
-        if not self.is_evaluating:
-            self._resample_commands(env_ids)
+        #if not self.is_evaluating:
+            #self._resample_commands(env_ids)
+        self._resample_target(env_ids)
+        self._resample_obstacles(env_ids)
+
+    def _resample_obstacles(self, env_ids):
+        robot_pos = self.simulator.robot_root_states[env_ids, :2]
+        for i in range(3):
+            rand_dist = torch_rand_float(1.5, 5.0, (len(env_ids), 1), device=self.device).squeeze(1)
+            rand_angle = torch_rand_float(-3.14159, 3.14159, (len(env_ids), 1), device=self.device).squeeze(1)
+            ox = robot_pos[:, 0] + rand_dist * torch.cos(rand_angle)
+            oy = robot_pos[:, 1] + rand_dist * torch.sin(rand_angle)
+            self.obstacle_pos[env_ids, i, 0] = ox
+            self.obstacle_pos[env_ids, i, 1] = oy
+        # num_envs=1일 때 마커 위치 업데이트
+        if self.num_envs == 1:
+            for i in range(3):
+                ox = self.obstacle_pos[0, i, 0].item()
+                oy = self.obstacle_pos[0, i, 1].item()
+                self.simulator.obstacle_markers[i].set_pos([[ox, oy, 0.76]])
+            tx = self.target_pos[0, 0].item()
+            ty = self.target_pos[0, 1].item()
+            self.simulator.target_marker.set_pos([[tx, ty, 0.3]])
 
     def set_is_evaluating(self, command=None):
         super().set_is_evaluating()
@@ -86,6 +138,11 @@ class LeggedRobotLocomotion(LeggedRobotBase):
         # Tracking of angular velocity commands (yaw) 
         ang_vel_error = torch.square(self.commands[:, 2] - self.base_ang_vel[:, 2])
         return torch.exp(-ang_vel_error/self.config.rewards.reward_tracking_sigma.ang_vel)
+
+    def _reward_goal_reached(self):
+        robot_xy = self.simulator.robot_root_states[:, :2]
+        dist = torch.norm(self.target_pos - robot_xy, dim=1)
+        return (dist < 0.5).float()
 
     ########################### PENALTY REWARDS ###########################
 
@@ -224,3 +281,38 @@ class LeggedRobotLocomotion(LeggedRobotBase):
     
     def _get_obs_command_ang_vel(self):
         return self.commands[:, 2:3]
+
+    ######################### Stage3: LiDAR & Obstacle #########################
+    def _compute_lidar_scan(self):
+        robot_xy = self.simulator.robot_root_states[:, :2]
+        forward = quat_apply(self.base_quat, self.forward_vec)
+        robot_yaw = torch.atan2(forward[:, 1], forward[:, 0])
+        angles = torch.linspace(0, 2 * 3.14159, self.num_scan_rays + 1,
+                        device=self.device, dtype=torch.float32)[:-1]
+        world_angles = robot_yaw.unsqueeze(1) + angles.unsqueeze(0)
+        ray_dx = torch.cos(world_angles)
+        ray_dy = torch.sin(world_angles)
+        scan = torch.full((self.num_envs, self.num_scan_rays),
+                          self.lidar_max_range, device=self.device)
+        r = self.obstacle_radius
+        for i in range(3):
+            dx = self.obstacle_pos[:, i, 0] - robot_xy[:, 0]
+            dy = self.obstacle_pos[:, i, 1] - robot_xy[:, 1]
+            proj = dx.unsqueeze(1) * ray_dx + dy.unsqueeze(1) * ray_dy
+            perp_sq = (dx.unsqueeze(1)**2 + dy.unsqueeze(1)**2) - proj**2
+            valid = (proj > 0) & (perp_sq < r**2)
+            hit_dist = proj - torch.sqrt(torch.clamp(r**2 - perp_sq, min=0.0))
+            hit_dist = torch.clamp(hit_dist, min=0.0, max=self.lidar_max_range)
+            scan = torch.where(valid & (hit_dist < scan), hit_dist, scan)
+        return scan
+
+    def _get_obs_lidar_scan(self):
+        return self._compute_lidar_scan() / self.lidar_max_range
+
+    def _reward_penalty_obstacle_collision(self):
+        robot_xy = self.simulator.robot_root_states[:, :2]
+        min_dist = torch.full((self.num_envs,), self.lidar_max_range, device=self.device)
+        for i in range(3):
+            d = torch.norm(robot_xy - self.obstacle_pos[:, i], dim=1)
+            min_dist = torch.minimum(min_dist, d)
+        return (min_dist < self.obstacle_radius + 0.3).float()

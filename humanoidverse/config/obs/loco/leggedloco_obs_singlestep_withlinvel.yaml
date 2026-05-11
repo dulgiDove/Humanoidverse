@@ -12,6 +12,7 @@ obs:
       dof_pos,
       dof_vel,
       actions,
+      lidar_scan,
       # history,
     ]
 
@@ -24,6 +25,7 @@ obs:
       dof_pos,
       dof_vel,
       actions,
+      lidar_scan,
       # history
     ]
 
@@ -52,6 +54,7 @@ obs:
     dof_vel: 0.05,
     history: 1.0,
     actions: 1.0,
+    lidar_scan: 1.0,
   }
 
   noise_scales: {
@@ -64,6 +67,7 @@ obs:
     dof_vel: 0.0,
     actions: 0.0,
     history: 0.0,
+    lidar_scan: 0.0,
   }
 
   # obs_dims should use list instead of dict
@@ -77,3 +81,4 @@ obs:
     - dof_pos: ${robot.dof_obs_size}
     - dof_vel: ${robot.dof_obs_size}
     - actions: ${robot.dof_obs_size}
+    - lidar_scan: 36
