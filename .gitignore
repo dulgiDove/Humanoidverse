@@ -53,3 +53,10 @@ __pycache__
 *.usda
 *.npz
 *.txt
+
+
+# checkpoint onnx (이미 *.onnx 있지만 명시적으로)
+exported/
+
+# Genesis 캐시
+genesis_cache/
