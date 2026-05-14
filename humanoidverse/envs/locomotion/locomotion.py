@@ -10,6 +10,7 @@ import torch
 from torch import Tensor
 from typing import Tuple, Dict
 from rich.progress import Progress
+from loguru import logger
 
 from humanoidverse.envs.env_utils.general import class_to_dict
 from humanoidverse.utils.spatial_utils.rotations import quat_apply_yaw, wrap_to_pi
@@ -38,6 +39,8 @@ class LeggedRobotLocomotion(LeggedRobotBase):
         self.obstacle_radius = 0.3
         self.num_scan_rays = 36
         self.lidar_max_range = 5.0
+        # Progress reward용: 이전 스텝 목표까지 거리 버퍼
+        self.prev_dist_to_target = torch.zeros(self.num_envs, dtype=torch.float32, device=self.device)
 
     def _setup_simulator_control(self):
         self.simulator.commands = self.commands
@@ -59,10 +62,11 @@ class LeggedRobotLocomotion(LeggedRobotBase):
         self.commands[:, 3] = target_heading
         self.commands[:, 0] = 1.0
         self.commands[:, 1] = 0.0 
+
         forward = quat_apply(self.base_quat, self.forward_vec)
         heading = torch.atan2(forward[:, 1], forward[:, 0])
         self.commands[:, 2] = torch.clip(
-            3.0 * wrap_to_pi(self.commands[:, 3] - heading), 
+            0.5 * wrap_to_pi(self.commands[:, 3] - heading), 
             self.command_ranges["ang_vel_yaw"][0], 
             self.command_ranges["ang_vel_yaw"][1]
         )
@@ -71,6 +75,7 @@ class LeggedRobotLocomotion(LeggedRobotBase):
         if len(reached) > 0:
             logger.info(f"[GOAL REACHED] env {reached.tolist()} | dist: {dist[reached].tolist()}")
             self._resample_target(reached)
+
             if self.num_envs == 1:
                 self._resample_obstacles(reached)
 
@@ -101,6 +106,11 @@ class LeggedRobotLocomotion(LeggedRobotBase):
             #self._resample_commands(env_ids)
         self._resample_target(env_ids)
         self._resample_obstacles(env_ids)
+        # 리셋 시 이전 거리 버퍼 초기화
+        robot_xy = self.simulator.robot_root_states[env_ids, :2]
+        self.prev_dist_to_target[env_ids] = torch.norm(
+            self.target_pos[env_ids] - robot_xy, dim=1
+        )
 
     def _resample_obstacles(self, env_ids):
         robot_pos = self.simulator.robot_root_states[env_ids, :2]
@@ -142,7 +152,10 @@ class LeggedRobotLocomotion(LeggedRobotBase):
     def _reward_goal_reached(self):
         robot_xy = self.simulator.robot_root_states[:, :2]
         dist = torch.norm(self.target_pos - robot_xy, dim=1)
-        return (dist < 0.5).float()
+        # Progress reward: 이전 스텝보다 가까워진 만큼만 보상
+        progress = self.prev_dist_to_target - dist
+        self.prev_dist_to_target = dist.clone()
+        return torch.clamp(progress, min=0.0)
 
     ########################### PENALTY REWARDS ###########################
 

@@ -390,7 +390,7 @@ class Genesis(BaseSimulator):
             # render_counter로 제어 스텝에 1번만 렌더
             self._render_counter = getattr(self, '_render_counter', 0) + 1
             if self._render_counter % self.sim_cfg.sim.control_decimation == 0:
-                obot_pos = self.robot.get_pos()[0].cpu().numpy()
+                robot_pos = self.robot.get_pos()[0].cpu().numpy()
 
                 if hasattr(self, 'target_pos_for_cam'):
                     tx, ty = self.target_pos_for_cam
