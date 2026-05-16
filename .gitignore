@@ -60,6 +60,9 @@ MonoBleedingEdge/
 UnityPlayer.dll
 *.exe
 
+*.bat
+*.sh
+
 
 # checkpoint onnx (이미 *.onnx 있지만 명시적으로)
 exported/
