@@ -85,11 +85,12 @@ class LeggedRobotLocomotion(LeggedRobotBase):
             self.simulator.target_pos_for_cam = (tx, ty)
 
     def _resample_target(self, env_ids):
-        robot_pos = self.simulator.robot_root_states[env_ids, :2]
         rand_dist = torch_rand_float(3.0, 8.0, (len(env_ids), 1), device=self.device).squeeze(1)
         rand_angle = torch_rand_float(-3.14159, 3.14159, (len(env_ids), 1), device=self.device).squeeze(1)
-        self.target_pos[env_ids, 0] = robot_pos[:, 0] + rand_dist * torch.cos(rand_angle)
-        self.target_pos[env_ids, 1] = robot_pos[:, 1] + rand_dist * torch.sin(rand_angle)
+
+        # robot_pos 제거 → 0,0 기준
+        self.target_pos[env_ids, 0] = rand_dist * torch.cos(rand_angle)
+        self.target_pos[env_ids, 1] = rand_dist * torch.sin(rand_angle)
 
     def _resample_commands(self, env_ids):
         self.commands[env_ids, 0] = torch_rand_float(self.command_ranges["lin_vel_x"][0], self.command_ranges["lin_vel_x"][1], (len(env_ids), 1), device=str(self.device)).squeeze(1)
@@ -114,14 +115,25 @@ class LeggedRobotLocomotion(LeggedRobotBase):
 
     def _resample_obstacles(self, env_ids):
         robot_pos = self.simulator.robot_root_states[env_ids, :2]
+
         for i in range(3):
-            rand_dist = torch_rand_float(1.5, 5.0, (len(env_ids), 1), device=self.device).squeeze(1)
-            rand_angle = torch_rand_float(-3.14159, 3.14159, (len(env_ids), 1), device=self.device).squeeze(1)
-            ox = robot_pos[:, 0] + rand_dist * torch.cos(rand_angle)
-            oy = robot_pos[:, 1] + rand_dist * torch.sin(rand_angle)
+            for _ in range(10):  # 최대 10번 재시도
+                rand_dist = torch_rand_float(1.5, 5.0, (len(env_ids), 1), device=self.device).squeeze(1)
+                rand_angle = torch_rand_float(-3.14159, 3.14159, (len(env_ids), 1), device=self.device).squeeze(1)
+
+                ox = rand_dist * torch.cos(rand_angle)
+                oy = rand_dist * torch.sin(rand_angle)
+
+                dist_to_robot = torch.norm(
+                    torch.stack([ox - robot_pos[:, 0], oy - robot_pos[:, 1]], dim=1), dim=1
+                )
+
+                if (dist_to_robot >= 0.5).all():
+                    break  # 모든 env에서 조건 충족 시 배치
+
             self.obstacle_pos[env_ids, i, 0] = ox
             self.obstacle_pos[env_ids, i, 1] = oy
-        # num_envs=1일 때 마커 위치 업데이트
+
         if self.num_envs == 1:
             for i in range(3):
                 ox = self.obstacle_pos[0, i, 0].item()

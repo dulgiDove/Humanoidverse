@@ -396,7 +396,6 @@ class Genesis(BaseSimulator):
                     tx, ty = self.target_pos_for_cam
                 else:
                     tx, ty = robot_pos[0], robot_pos[1]
-
                 self.cam.set_pose(
                     pos=(tx, ty, 8.0),
                     lookat=(robot_pos[0], robot_pos[1], robot_pos[2] + 0.8),
