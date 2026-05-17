@@ -210,6 +210,7 @@ def main(override_config: OmegaConf):
         actor_state["actions"] = actions
         actor_state = algo.env_step(actor_state)
         ws_server.send_robot_state(env)
+        ws_server.send_static_state(env)
         step += 1
 
 if __name__ == "__main__":

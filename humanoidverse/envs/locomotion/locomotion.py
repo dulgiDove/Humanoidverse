@@ -85,12 +85,26 @@ class LeggedRobotLocomotion(LeggedRobotBase):
             self.simulator.target_pos_for_cam = (tx, ty)
 
     def _resample_target(self, env_ids):
-        rand_dist = torch_rand_float(3.0, 8.0, (len(env_ids), 1), device=self.device).squeeze(1)
-        rand_angle = torch_rand_float(-3.14159, 3.14159, (len(env_ids), 1), device=self.device).squeeze(1)
+        min_dist = 0.8
 
-        # robot_pos 제거 → 0,0 기준
-        self.target_pos[env_ids, 0] = rand_dist * torch.cos(rand_angle)
-        self.target_pos[env_ids, 1] = rand_dist * torch.sin(rand_angle)
+        for _ in range(20):
+            rand_dist = torch_rand_float(3.0, 8.0, (len(env_ids), 1), device=self.device).squeeze(1)
+            rand_angle = torch_rand_float(-3.14159, 3.14159, (len(env_ids), 1), device=self.device).squeeze(1)
+
+            tx = rand_dist * torch.cos(rand_angle)
+            ty = rand_dist * torch.sin(rand_angle)
+
+            # 모든 장애물과 거리 체크
+            obs_ok = torch.ones(len(env_ids), dtype=torch.bool, device=self.device)
+            for i in range(3):
+                d = torch.norm(torch.stack([tx - self.obstacle_pos[env_ids, i, 0], ty - self.obstacle_pos[env_ids, i, 1]], dim=1), dim=1)
+                obs_ok &= (d >= min_dist)
+
+            if obs_ok.all():
+                break
+
+        self.target_pos[env_ids, 0] = tx
+        self.target_pos[env_ids, 1] = ty
 
     def _resample_commands(self, env_ids):
         self.commands[env_ids, 0] = torch_rand_float(self.command_ranges["lin_vel_x"][0], self.command_ranges["lin_vel_x"][1], (len(env_ids), 1), device=str(self.device)).squeeze(1)
@@ -115,21 +129,30 @@ class LeggedRobotLocomotion(LeggedRobotBase):
 
     def _resample_obstacles(self, env_ids):
         robot_pos = self.simulator.robot_root_states[env_ids, :2]
+        min_dist = 0.8  # 최소 거리
 
         for i in range(3):
-            for _ in range(10):  # 최대 10번 재시도
+            for _ in range(20):
                 rand_dist = torch_rand_float(1.5, 5.0, (len(env_ids), 1), device=self.device).squeeze(1)
                 rand_angle = torch_rand_float(-3.14159, 3.14159, (len(env_ids), 1), device=self.device).squeeze(1)
 
                 ox = rand_dist * torch.cos(rand_angle)
                 oy = rand_dist * torch.sin(rand_angle)
 
-                dist_to_robot = torch.norm(
-                    torch.stack([ox - robot_pos[:, 0], oy - robot_pos[:, 1]], dim=1), dim=1
-                )
+                # 로봇과 거리 체크
+                dist_robot = torch.norm(torch.stack([ox - robot_pos[:, 0], oy - robot_pos[:, 1]], dim=1), dim=1)
 
-                if (dist_to_robot >= 0.5).all():
-                    break  # 모든 env에서 조건 충족 시 배치
+                # 목표와 거리 체크
+                dist_target = torch.norm(torch.stack([ox - self.target_pos[env_ids, 0], oy - self.target_pos[env_ids, 1]], dim=1), dim=1)
+
+                # 이전 장애물들과 거리 체크
+                dist_obs_ok = torch.ones(len(env_ids), dtype=torch.bool, device=self.device)
+                for j in range(i):
+                    d = torch.norm(torch.stack([ox - self.obstacle_pos[env_ids, j, 0], oy - self.obstacle_pos[env_ids, j, 1]], dim=1), dim=1)
+                    dist_obs_ok &= (d >= min_dist)
+
+                if (dist_robot >= 0.5).all() and (dist_target >= min_dist).all() and dist_obs_ok.all():
+                    break
 
             self.obstacle_pos[env_ids, i, 0] = ox
             self.obstacle_pos[env_ids, i, 1] = oy
