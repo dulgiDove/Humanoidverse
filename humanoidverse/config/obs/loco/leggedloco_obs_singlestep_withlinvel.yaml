@@ -1,36 +1,37 @@
 # @package _global_
 
-# Be careful when using _raw, history
+# E2E Goal Reaching PPO v9 observation
+# command_lin_vel / command_ang_vel → goal_direction / goal_distance 로 교체
+# lidar_scan 포함: 목표 방향, 목표 거리, 장애물 정보를 policy/critic 모두 볼 수 있음
+# 총 obs 차원: 78
+
 obs:
   obs_dict:
     actor_obs: [
-      base_lin_vel,
-      base_ang_vel,
-      projected_gravity,
-      command_lin_vel,
-      command_ang_vel,
-      dof_pos,
-      dof_vel,
-      actions,
-      lidar_scan,
-      # history,
+      base_lin_vel,       # 3
+      base_ang_vel,       # 3
+      projected_gravity,  # 3
+      goal_direction,     # 2  ← (구) command_lin_vel: 로컬 프레임 목표 방향 단위벡터
+      goal_distance,      # 1  ← (구) command_ang_vel: 정규화된 목표 거리
+      dof_pos,            # 10
+      dof_vel,            # 10
+      actions,            # 10
+      lidar_scan,         # 36
     ]
 
     critic_obs: [
       base_lin_vel,
       base_ang_vel,
       projected_gravity,
-      command_lin_vel,
-      command_ang_vel,
+      goal_direction,
+      goal_distance,
       dof_pos,
       dof_vel,
       actions,
       lidar_scan,
-      # history
     ]
 
-  # define those coumpounds in obs_dict, for example, you can define different long/short history with different length
-  obs_auxiliary: 
+  obs_auxiliary:
     history_long: {
       dof_pos: 20,
       dof_vel: 2,
@@ -43,13 +44,12 @@ obs:
       actions: 1,
     }
 
-
   obs_scales: {
     base_lin_vel: 2.0,
     base_ang_vel: 0.25,
     projected_gravity: 1.0,
-    command_lin_vel: 1.0,
-    command_ang_vel: 1.0,
+    goal_direction: 1.0,   # 이미 단위벡터 (-1~1), 추가 스케일 불필요
+    goal_distance: 1.0,    # 이미 0~1 정규화됨
     dof_pos: 1.0,
     dof_vel: 0.05,
     history: 1.0,
@@ -61,8 +61,8 @@ obs:
     base_lin_vel: 0.0,
     base_ang_vel: 0.0,
     projected_gravity: 0.0,
-    command_lin_vel: 0.0,
-    command_ang_vel: 0.0,
+    goal_direction: 0.0,
+    goal_distance: 0.0,
     dof_pos: 0.0,
     dof_vel: 0.0,
     actions: 0.0,
@@ -70,14 +70,12 @@ obs:
     lidar_scan: 0.0,
   }
 
-  # obs_dims should use list instead of dict
-  # will be converted to dict in `pre_process_config`
   obs_dims:
     - base_lin_vel: 3
     - base_ang_vel: 3
     - projected_gravity: 3
-    - command_lin_vel: 2
-    - command_ang_vel: 1
+    - goal_direction: 2    # ← (구) command_lin_vel: 2
+    - goal_distance: 1     # ← (구) command_ang_vel: 1
     - dof_pos: ${robot.dof_obs_size}
     - dof_vel: ${robot.dof_obs_size}
     - actions: ${robot.dof_obs_size}

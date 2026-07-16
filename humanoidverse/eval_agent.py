@@ -147,6 +147,10 @@ def main(override_config: OmegaConf):
     config.env.config.ckpt_dir = str(checkpoint.parent) # commented out for now, might need it back to save motion
     env = instantiate(config.env, device=device)
 
+    # 영상화 시 goal 거리 고정 (커리큘럼 무시하고 8m 목표)
+    env.max_goal_dist = 8.0
+    env.min_goal_dist = 8.0
+
     # Start a thread to listen for key press
     key_listener_thread = threading.Thread(target=listen_for_keypress, args=(env,))
     key_listener_thread.daemon = True
@@ -203,15 +207,31 @@ def main(override_config: OmegaConf):
         "stop": False
     }
     step = 0
+
+    env.simulator.start_recording(filename='e2e_eval.mp4')
+
     while True:
         actor_state["step"] = step
         ws_server.apply_target_if_updated(env)
         actions = eval_policy(actor_state["obs"]['actor_obs'])
         actor_state["actions"] = actions
+
+        prev_target = env.target_pos[0].clone()
+        prev_obstacles = env.obstacle_pos[0].clone()
+
         actor_state = algo.env_step(actor_state)
+        
+        if not torch.allclose(env.target_pos[0], prev_target) or not torch.allclose(env.obstacle_pos[0], prev_obstacles):
+            ws_server._target_changed = True
+            ws_server._obstacles_changed = True
+
         ws_server.send_robot_state(env)
         ws_server.send_static_state(env)
         step += 1
+
+        if step >= 3000:
+            env.simulator.stop_recording()
+            break
 
 if __name__ == "__main__":
     main()
