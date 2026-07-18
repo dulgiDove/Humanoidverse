@@ -39,6 +39,30 @@ class LeggedRobotLocomotion(LeggedRobotBase):
         self.num_scan_rays = 36
         self.lidar_max_range = 5.0
 
+        # ── [스타일 보상] mocap reference motion 로드 ─────────────────────────
+        # cmu_walk_h1.npy: (총 프레임 수, 10) float32
+        # 10 DOF 순서: L_yaw, L_roll, L_pitch, L_knee, L_ankle,
+        #              R_yaw, R_roll, R_pitch, R_knee, R_ankle
+        _motion_path = os.path.join(
+            os.path.dirname(__file__),          # envs/locomotion/
+            "..", "..", "data", "motions", "cmu_walk_h1.npy"
+        )
+        _motion_path = os.path.normpath(_motion_path)
+        if os.path.exists(_motion_path):
+            _ref = np.load(_motion_path)                            # (T, 10) numpy
+            self.ref_motion = torch.tensor(
+                _ref, dtype=torch.float32, device=self.device
+            )                                                       # (T, 10) GPU tensor
+            self.ref_motion_len = self.ref_motion.shape[0]
+            # 각 env마다 독립적인 위상(phase) 인덱스 — 리셋 시 랜덤 초기화
+            self.motion_phase_idx = torch.zeros(
+                self.num_envs, dtype=torch.long, device=self.device
+            )
+            self._has_ref_motion = True
+        else:
+            self._has_ref_motion = False
+            print(f"[경고] reference motion 파일을 찾을 수 없습니다: {_motion_path}")
+
     def _setup_simulator_control(self):
         self.simulator.commands = self.commands
 
@@ -102,6 +126,13 @@ class LeggedRobotLocomotion(LeggedRobotBase):
         self._resample_target(env_ids)
         self._resample_obstacles(env_ids)
 
+        # ── [스타일 보상] 리셋 시 각 env의 위상 인덱스를 랜덤하게 초기화 ──
+        # 모든 env가 같은 위상에서 시작하면 학습이 편향될 수 있으므로 랜덤 시작
+        if self._has_ref_motion:
+            self.motion_phase_idx[env_ids] = torch.randint(
+                0, self.ref_motion_len, (len(env_ids),), device=self.device
+            )
+
     def _resample_obstacles(self, env_ids):
         robot_pos = self.simulator.robot_root_states[env_ids, :2]
         for i in range(3):
@@ -143,6 +174,44 @@ class LeggedRobotLocomotion(LeggedRobotBase):
         robot_xy = self.simulator.robot_root_states[:, :2]
         dist = torch.norm(self.target_pos - robot_xy, dim=1)
         return (dist < 0.5).float()
+
+    # ── [스타일 보상] ──────────────────────────────────────────────────────
+    def _reward_style_imitation(self):
+        """
+        CMU mocap 걷기 데이터를 reference motion으로 사용하는 스타일 보상.
+
+        현재 로봇 하체 10 DOF의 관절 각도와 reference motion의 동일 위상
+        관절 각도를 비교하여, 차이가 작을수록 높은 보상을 준다.
+
+        수식: r = exp(-w * ||q_current - q_ref||^2)
+          - w: 민감도 계수 (config의 style_imitation_sigma로 조절)
+          - 차이가 0이면 r=1.0 (최대), 차이가 클수록 r→0
+
+        매 스텝마다 motion_phase_idx를 1씩 전진시켜 순환함.
+        리셋 시에는 _reset_tasks_callback에서 랜덤 위상으로 초기화.
+        """
+        if not self._has_ref_motion:
+            return torch.zeros(self.num_envs, device=self.device)
+
+        # 현재 위상에 해당하는 reference 관절 각도 가져오기
+        # ref_motion: (T, 10),  motion_phase_idx: (num_envs,)
+        ref_pose = self.ref_motion[self.motion_phase_idx]   # (num_envs, 10)
+
+        # 현재 로봇 하체 관절 각도 (DOF 0~9 = 하체 10개)
+        # dof_pos shape: (num_envs, 총 DOF 수)
+        current_pose = self.simulator.dof_pos[:, :10]       # (num_envs, 10)
+
+        # 관절 각도 오차의 제곱합
+        pose_diff_sq = torch.sum(torch.square(current_pose - ref_pose), dim=1)  # (num_envs,)
+
+        # sigma 값으로 민감도 조절 (클수록 관대함)
+        sigma = getattr(self.config.rewards, "style_imitation_sigma", 0.5)
+        reward = torch.exp(-pose_diff_sq / sigma)
+
+        # 위상 인덱스 1 전진 (순환)
+        self.motion_phase_idx = (self.motion_phase_idx + 1) % self.ref_motion_len
+
+        return reward
 
     ########################### PENALTY REWARDS ###########################
 
