@@ -46,6 +46,7 @@ __pycache__
 
 *.pkl
 *.pt
+!logs/StyleImitation/**/model_*.pt
 
 # virtualenv
 .venv*
