@@ -53,6 +53,7 @@ __pycache__
 *.usda
 *.npz
 *.txt
+!humanoidverse/data/motions/cmu_walk_h1.npy
 
 
 # checkpoint onnx (이미 *.onnx 있지만 명시적으로)
