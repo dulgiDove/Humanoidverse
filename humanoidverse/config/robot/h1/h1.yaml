@@ -168,3 +168,5 @@ robot:
     robot_type: h1
     self_collisions: 1 # 1 to disable, 0 to enable self collisions
     default_dof_drive_mode: 3
+
+  motion: {}

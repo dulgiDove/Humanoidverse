@@ -67,6 +67,39 @@ class LeggedRobotLocomotion(LeggedRobotBase):
         self.curriculum_check_interval = 1000  # 1000 에피소드마다 판단
         self.curriculum_threshold = 0.70       # 성공률 기준
 
+        # ── [스타일 보상] mocap reference motion 로드 (클립 단위, 2026.07.20 수정) ──
+        # 기존 cmu_walk_h1.npy는 서로 다른 사람의 걷기 클립을 그냥 이어붙인 형태라
+        # 클립 경계에서 관절 각도가 순간이동하듯 튀는 문제가 있었음 (46곳 발견).
+        # cmu_walk_h1_full19_clips.npz: clips(num_clips, max_len, 19) + lengths(num_clips,)
+        # 2026.07.21: 하체10 + 상체9(토르소, 양쪽 어깨3축, 팔꿈치) = 19 DOF로 확장
+        # 에피소드마다 클립 하나를 랜덤하게 골라, 그 클립 안에서만 위상이 순환하도록 함
+        # (클립 간 순간이동 없음)
+        _motion_path = os.path.join(
+            os.path.dirname(__file__),          # envs/locomotion/
+            "..", "..", "data", "motions", "cmu_walk_h1_full19_clips.npz"
+        )
+        _motion_path = os.path.normpath(_motion_path)
+        if os.path.exists(_motion_path):
+            _npz = np.load(_motion_path)
+            self.ref_motion_clips = torch.tensor(
+                _npz["clips"], dtype=torch.float32, device=self.device
+            )                                                       # (num_clips, max_len, 10)
+            self.ref_motion_clip_lens = torch.tensor(
+                _npz["lengths"], dtype=torch.long, device=self.device
+            )                                                       # (num_clips,)
+            self.num_ref_clips = self.ref_motion_clips.shape[0]
+            # 각 env마다: 현재 배정된 클립 idx + 그 클립 안에서의 위상(phase) idx
+            self.motion_clip_idx = torch.zeros(
+                self.num_envs, dtype=torch.long, device=self.device
+            )
+            self.motion_phase_idx = torch.zeros(
+                self.num_envs, dtype=torch.long, device=self.device
+            )
+            self._has_ref_motion = True
+        else:
+            self._has_ref_motion = False
+            print(f"[경고] reference motion 파일을 찾을 수 없습니다: {_motion_path}")
+
     def _setup_simulator_control(self):
         self.simulator.commands = self.commands
 
@@ -231,6 +264,17 @@ class LeggedRobotLocomotion(LeggedRobotBase):
             self.target_pos[env_ids] - robot_xy, dim=1
         )
 
+        # ── [스타일 보상] 리셋 시 클립을 랜덤하게 배정하고, 그 클립 안에서 랜덤 위상으로 초기화 ──
+        # (master 브랜치 병합 시 누락됐던 부분 + 클립 단위 구조로 재작성, 2026.07.20)
+        if self._has_ref_motion:
+            n = len(env_ids)
+            new_clip_idx = torch.randint(0, self.num_ref_clips, (n,), device=self.device)
+            self.motion_clip_idx[env_ids] = new_clip_idx
+            clip_lens = self.ref_motion_clip_lens[new_clip_idx]
+            # 클립별로 길이가 달라서 각 env마다 다른 상한으로 랜덤 정수를 뽑아야 함
+            rand_frac = torch.rand(n, device=self.device)
+            self.motion_phase_idx[env_ids] = (rand_frac * clip_lens.float()).long()
+
     def _resample_obstacles(self, env_ids):
         robot_pos = self.simulator.robot_root_states[env_ids, :2]
         min_dist = 0.8
@@ -336,6 +380,48 @@ class LeggedRobotLocomotion(LeggedRobotBase):
         """
         goal_dir = self._get_obs_goal_direction()
         return goal_dir[:, 0]
+
+    # ── [스타일 보상] (master 브랜치에서 병합) ──────────────────────────────
+    def _reward_style_imitation(self):
+        """
+        CMU mocap 걷기 데이터를 reference motion으로 사용하는 스타일 보상.
+
+        로봇 관절 각도와 reference motion의 동일 위상 관절 각도를 비교하여,
+        차이가 작을수록 높은 보상을 준다. ref_motion_clips의 마지막 차원 크기에 맞춰
+        하체 10 DOF 또는 전신 19 DOF(하체+상체)를 자동으로 비교한다.
+
+        수식: r = exp(-w * ||q_current - q_ref||^2)
+          - w: 민감도 계수 (config의 style_imitation_sigma로 조절)
+          - 차이가 0이면 r=1.0 (최대), 차이가 클수록 r→0
+
+        매 스텝마다 motion_phase_idx를 1씩 전진시켜, 각 env에 배정된 클립 "안에서만" 순환함
+        (클립 경계를 넘어가지 않으므로 서로 다른 사람 클립 간 순간이동 문제가 없음).
+        리셋 시에는 _reset_tasks_callback에서 클립을 새로 뽑고 랜덤 위상으로 초기화.
+        """
+        if not self._has_ref_motion:
+            return torch.zeros(self.num_envs, device=self.device)
+
+        # 현재 env마다 배정된 클립에서, 그 위상에 해당하는 reference 관절 각도 가져오기
+        # ref_motion_clips: (num_clips, max_len, ref_dof) - ref_dof는 10(하체) 또는 19(전신)
+        ref_pose = self.ref_motion_clips[self.motion_clip_idx, self.motion_phase_idx]  # (num_envs, ref_dof)
+
+        # 현재 로봇 관절 각도를 ref_pose와 동일한 DOF 수만큼만 비교
+        # dof_pos shape: (num_envs, 총 DOF 수)
+        ref_dof = ref_pose.shape[-1]
+        current_pose = self.simulator.dof_pos[:, :ref_dof]       # (num_envs, ref_dof)
+
+        # 관절 각도 오차의 제곱합
+        pose_diff_sq = torch.sum(torch.square(current_pose - ref_pose), dim=1)  # (num_envs,)
+
+        # sigma 값으로 민감도 조절 (클수록 관대함)
+        sigma = getattr(self.config.rewards, "style_imitation_sigma", 0.5)
+        reward = torch.exp(-pose_diff_sq / sigma)
+
+        # 위상 인덱스 1 전진 (각 env가 배정된 클립의 길이 안에서만 순환)
+        current_clip_lens = self.ref_motion_clip_lens[self.motion_clip_idx]
+        self.motion_phase_idx = (self.motion_phase_idx + 1) % current_clip_lens
+
+        return reward
 
     ########################### PENALTY REWARDS ###########################
 

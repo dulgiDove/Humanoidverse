@@ -10,7 +10,10 @@ algo:
     gamma: 0.99
     lam: 0.95
     value_loss_coef: 1.0
-    entropy_coef: 0.01
+    # 0.01 -> 0.005: entropy는 관절 수만큼 sum되는 구조라(ppo_modules.py entropy property),
+    # 10 DOF -> 19 DOF(h1 전신) 확장 후 그대로 두면 노이즈가 계속 폭주하는 문제 확인 (2026.07.22).
+    # h1_10dof로 되돌아갈 일이 있으면 0.01로 복원 고려할 것.
+    entropy_coef: 0.005
     actor_learning_rate: 1.e-3 # 5e-4 # 1.e-3
     critic_learning_rate: 1.e-3 # 5e-4 # 1.e-3
     max_grad_norm: 1.0

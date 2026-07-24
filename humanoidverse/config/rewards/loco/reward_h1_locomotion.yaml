@@ -44,9 +44,26 @@ rewards:
       penalty_obstacle_collision: -40.0
       penalty_obstacle_proximity: -2.0
 
+      # ── [스타일 보상] CMU mocap 걷기 모션 모방 보상 (정상일 추가, master 브랜치에서 병합) ──
+      # 1.2로 8m 도달 후 style_imitation이 0.35 근처에서 정체(3시간+ 평행선) 확인.
+      # mocap 클립 분리 수정 이후이므로 완만하게 1.7로 상향 (2026.07.20)
+      # 19-DOF 전신 확장 + entropy_coef 수정 이후 8m 근처에서 style_imitation이 완전히 0으로
+      # 죽는 현상 확인 (2026.07.22) — 상체가 모캡과 너무 멀어져 exp() 신호가 사라진 것으로 판단,
+      # sigma를 넓혀 재개.
+      style_imitation: 1.7
+
+      # 상체 관절을 기본자세 근처로 유지하도록 유도하는 안전장치.
+      # style_imitation만으로는 신호가 죽었을 때 상체가 임의의 자세로 고정되는 문제(팔 들림,
+      # 상체 틀어짐)가 관측되어 추가함 (2026.07.22).
+      upperbody_joint_angle_freeze: -0.1
+
   reward_tracking_sigma:
     lin_vel: 0.25
     ang_vel: 0.25
+
+  # [스타일 보상] 관절 각도 오차 민감도 (정상일 추가)
+  # 0.5 -> 1.5: 8m 근처에서 신호가 완전히 죽는 문제 확인 후 완화 (2026.07.22)
+  style_imitation_sigma: 1.5
 
   reward_limit:
     soft_dof_pos_limit: 0.9
