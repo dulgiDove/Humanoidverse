@@ -1,446 +1,320 @@
-<h1 align="center"> HumanoidVerse: A Multi-Simulator Framework for 
-    
-Humanoid Robot Sim-to-Real Learning. </h1>
+# Humanoid Navigation Challenge
 
-<div align="center">
-<p align="center">
-    <img src="assets/humanoidverse-logo-crop-png.png"> &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;
-</p>
+## 1. 프로젝트 개요
 
+본 프로젝트는 **HumanoidVerse**와 **Genesis Simulator**를 기반으로 한 휴머노이드 로봇 주행 데모입니다.
 
-[![IsaacGym](https://img.shields.io/badge/IsaacGym-Preview4-b.svg)](https://developer.nvidia.com/isaac-gym)
+H1 10DoF 휴머노이드 로봇이 학습된 강화학습 정책을 사용하여 목표 지점까지 이동하고, 주변 장애물을 회피하는 과정을 Genesis Viewer에서 시각화합니다.
 
-[![IsaacSim](https://img.shields.io/badge/IsaacSim-4.2.0-b.svg)](https://docs.isaacsim.omniverse.nvidia.com/4.2.0/index.html)
+또한 로컬 웹 컨트롤 패널을 제공하여 목표 좌표와 장애물 좌표를 직접 입력하거나 랜덤으로 생성한 뒤 시뮬레이션에 적용할 수 있습니다.
 
-[![Genesis](https://img.shields.io/badge/Genesis-0.2.1-b.svg)](https://docs.isaacsim.omniverse.nvidia.com/4.2.0/index.html)
+---
 
+## 2. 주요 기능
 
-[![Linux platform](https://img.shields.io/badge/Platform-linux--64-orange.svg)](https://ubuntu.com/blog/tag/22-04-lts)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)]()
+- H1 10DoF 휴머노이드 로봇 시뮬레이션
+- 학습된 PPO 정책 기반 목표 지점 이동
+- 3개의 장애물 회피
+- Genesis Viewer 기반 3D 시각화
+- 로컬 웹 컨트롤 패널 제공
+- Target / Obstacle 좌표 직접 입력
+- Target / Obstacle 좌표 랜덤 생성
+- Start / Pause / Reset / Info / Fit Camera 기능
+- 목표 도달 후 새로운 목표 및 장애물 자동 갱신
 
-</div>
+---
 
-# What is HumanoidVerse?
-HumanoidVerse supports multiple simulators and tasks for humanoid robot sim-to-real learning. A key design logic is the separation and modularization of simulators, tasks, and algorithms, allowing for conviniently switching between simulators and tasks, and develop new ones with minimal efforts.
+## 3. 실행 환경
 
-We compared the scope of HumanoidVerse with other sim-to-real frameworks and summarized the differences in supported features in the following table:
+본 프로젝트는 다음 환경에서 테스트되었습니다.
 
-<div align="center">
+- Windows 11
+- WSL2 Ubuntu
+- NVIDIA GPU
+- Miniconda
+- Python 3.10
+- PyTorch CUDA 12.1
+- Genesis World 0.2.1
+- HumanoidVerse
 
-| Framework | Multi Simulators | Sim2Sim & Sim2Real |
-| --- | --- | --- |
-| HumanoidVerse | :white_check_mark: | :white_check_mark: |
-| [Mujoco Playground](https://playground.mujoco.org/#) | :x: | :white_check_mark: |
-| [ProtoMotions](https://github.com/NVlabs/ProtoMotions) | :white_check_mark: | :x: |
-| [Humanoid Gym](https://github.com/roboterax/humanoid-gym) | :x: | :white_check_mark: |
-| [Unitree RL Gym](https://github.com/unitreerobotics/unitree_rl_gym) | :x: | :white_check_mark: |
-| [Legged Gym](https://github.com/leggedrobotics/legged_gym) | :x: | :x: |
+주의: 본 프로젝트는 Genesis Viewer와 CUDA 기반 PyTorch를 사용하므로, Windows 환경에서는 WSL2와 NVIDIA GPU 드라이버가 정상적으로 설정되어 있어야 합니다.
 
-</div>
+---
 
-## TODO
-- [x] Support for multiple simulators: (Currently) IsaacGym, Genesis, IsaacLab.
-- [x] Support for multiple embodiments: (Currently) Unitree Humanoid H1-10DoF, H1-19DoF, G1-12DoF, G1-23DoF.
-- [ ] Sim-to-Sim and Sim-to-Real pipelines.
-- [ ] Motion tracking tasks.
+## 4. 사전 준비
 
-# News
+실행 전에 다음 항목이 설치되어 있어야 합니다.
 
-- 2025-02-04: :tada: Initial Public Release! We have released the locomotion training pipeline for humanoid robots in IsaacGym, IsaacSim and Genesis.
+- WSL2 Ubuntu
+- Miniconda 또는 Anaconda
+- NVIDIA GPU Driver
+- WSL에서 CUDA 사용 가능 환경
 
-
-# Installation
-
-Note: 
-- We recommend using `mamba` other than using `conda`, beacuse `mamba` is faster. Refer to [Docs of Mamaba](https://mamba.readthedocs.io/en/latest/installation/mamba-installation.html) to install mamba.
-- We are creating separate environments for each simulator, to avoid the dependency hell of different simulators.
-- You do not need to install all of the simulators at once. If you only want to use IsaacGym, you can skip the installation of the other simulators.
-
-## IsaacGym
-
-<details>
-<summary>Environment Setup for IsaacGym Simulator.</summary>
-
-Clone the repository from source:
+CUDA 사용 가능 여부는 다음 명령으로 확인할 수 있습니다.
 
 ```bash
-git clone git@github.com:LeCAR-Lab/HumanoidVerse.git
-cd HumanoidVerse
+nvidia-smi
 ```
 
-Create a virtual environment with python 3.8.
+WSL에서 GUI 앱이 실행 가능한지도 확인하는 것이 좋습니다.
 
 ```bash
-mamba create -n hgym python=3.8
-mamba activate hgym
+xeyes
 ```
 
-Download [IsaacGym](https://developer.nvidia.com/isaac-gym) outside of the HumanoidVerse repository, and extract it.
+`xeyes`가 없는 경우 아래 명령으로 설치할 수 있습니다.
 
 ```bash
-cd ../
-wget https://developer.nvidia.com/isaac-gym-preview-4
-tar -xvzf isaac-gym-preview-4
+sudo apt update
+sudo apt install -y x11-apps
 ```
 
-Now the file structure should look like this:
+---
+
+## 5. 설치 방법
+
+압축 파일을 해제한 뒤 프로젝트 폴더로 이동합니다.
+
+```bash
+cd HumanoidVerse_submit_clean
+```
+
+압축 해제 과정에서 `.sh` 파일의 실행 권한이 사라질 수 있으므로, 먼저 실행 권한을 부여합니다.
+
+```bash
+chmod +x scripts/setup_env.sh scripts/run_demo.sh
+```
+
+처음 한 번만 환경 설치 스크립트를 실행합니다.
+
+```bash
+./scripts/setup_env.sh
+```
+
+이 스크립트는 다음 작업을 수행합니다.
+
+- Ubuntu OpenGL / viewer 관련 패키지 설치
+- Conda 환경 생성
+- Python 3.10 환경 구성
+- PyTorch CUDA 12.1 설치
+- HumanoidVerse 로컬 프로젝트 설치
+- Genesis World 0.2.1 설치
+- numpy 1.26.4 고정
+- rsl_rl 설치
+- tensorboard, pynput, rich, termcolor 등 추가 의존성 설치
+- libigl, pyglet, PyOpenGL 버전 고정
+
+기본 Conda 환경 이름은 `hgen`입니다.
+
+다른 환경 이름을 사용하려면 다음처럼 실행할 수 있습니다.
+
+```bash
+ENV_NAME=hgen_submit_test ./scripts/setup_env.sh
+```
+
+---
+
+## 6. 실행 방법
+
+설치가 완료되면 다음 명령으로 데모를 실행합니다.
+
+```bash
+./scripts/run_demo.sh
+```
+
+다른 Conda 환경 이름으로 설치했다면 실행 시에도 같은 환경 이름을 지정합니다.
+
+```bash
+ENV_NAME=hgen_submit_test ./scripts/run_demo.sh
+```
+
+정상 실행 시 Genesis Viewer가 열리고, 터미널에 다음과 같은 웹 패널 주소가 출력됩니다.
 
 ```text
-❯ tree . -L 1
-.
-├── isaacgym
-└── HumanoidVerse
-
-2 directories, 0 files
+http://localhost:8080
 ```
 
-Install IsaacGym Python API, `PyTorch` will be installed at this step.
+웹 브라우저에서 위 주소로 접속하면 로컬 웹 컨트롤 패널을 사용할 수 있습니다.
+
+---
+
+## 7. 웹 컨트롤 패널 사용법
+
+웹 브라우저에서 다음 주소에 접속합니다.
+
+```text
+http://localhost:8080
+```
+
+### Coordinate Setup
+
+- **Target X/Y**: 목표 지점 좌표를 입력합니다.
+- **Obstacle 1/2/3 X/Y**: 장애물 좌표를 입력합니다.
+- **Random**: 해당 항목의 좌표를 랜덤으로 생성합니다.
+- **Random All**: 목표와 모든 장애물 좌표를 랜덤으로 생성합니다.
+- **Apply**: 입력된 좌표를 Genesis 시뮬레이션에 적용합니다.
+
+### Simulation Control
+
+- **Start**: 로봇 정책 실행을 시작합니다.
+- **Pause**: 시뮬레이션 진행을 일시정지합니다.
+- **Reset**: 로봇과 환경 상태를 초기화합니다. 마지막으로 Apply한 Target / Obstacle 좌표가 있으면 해당 배치를 유지한 채 초기화됩니다.
+- **Info**: 현재 로봇 위치, 목표 위치, 장애물 위치, 목표까지의 거리 등을 출력합니다.
+- **Fit Camera**: 로봇, 목표, 장애물이 한 화면에 보이도록 카메라 위치를 조정합니다.
+
+---
+
+## 8. Random 좌표 생성 범위
+
+Random 버튼은 현재 로봇 위치를 기준으로 좌표를 생성합니다.
+
+- Target Random: 로봇 기준 거리 1.5m ~ 8.0m
+- Obstacle Random: 로봇 기준 거리 1.5m ~ 5.0m
+- Target과 Obstacle, Obstacle끼리는 최소 0.8m 이상 떨어지도록 생성
+
+주의: 좌표의 X/Y 각각이 위 범위로 제한되는 것이 아니라, 로봇으로부터의 거리 기준입니다.
+
+---
+
+## 9. 포함 파일 구조
+
+```text
+HumanoidVerse_submit_clean/
+├─ assets/
+├─ humanoidverse/
+│  ├─ eval_web_control.py
+│  ├─ eval_visualize.py
+│  └─ eval_agent.py
+├─ logs/
+│  └─ H1_E2E/
+│     └─ 최신 학습 결과 폴더/
+│        └─ model_*.pt
+├─ scripts/
+│  ├─ setup_env.sh
+│  └─ run_demo.sh
+├─ LICENSE
+├─ README.md
+└─ pyproject.toml
+```
+
+---
+
+## 10. 주요 실행 파일
+
+### `humanoidverse/eval_web_control.py`
+
+최종 데모 실행 파일입니다. Genesis Viewer와 로컬 웹 컨트롤 패널을 함께 실행합니다.
+
+### `humanoidverse/eval_visualize.py`
+
+웹 컨트롤 패널 없이 Genesis Viewer만 실행하는 백업용 시각화 파일입니다.
+
+### `humanoidverse/eval_agent.py`
+
+기존 평가 실행 파일입니다.
+
+---
+
+## 11. Checkpoint
+
+본 제출물에는 학습된 checkpoint가 포함되어 있습니다.
+
+데모 실행 시 `scripts/run_demo.sh`가 아래 경로에서 최신 checkpoint를 자동으로 찾습니다.
 
 ```bash
-pip install -e ./isaacgym/python/.
+find logs/H1_E2E -name "model_*.pt" | sort -V | tail -1
 ```
 
-(Optional) Test IsaacGym installation:
+따라서 별도의 학습 과정 없이 데모 실행이 가능합니다.
+
+---
+
+## 12. 문제 해결
+
+### 1. 웹 페이지가 열리지 않는 경우
+
+기본 주소는 다음과 같습니다.
+
+```text
+http://localhost:8080
+```
+
+기존 실행 프로세스가 남아 있으면 8080 포트가 충돌할 수 있습니다.
 
 ```bash
-cd isaacgym/python/examples/
-python 1080_balls_of_solitude.py # or
-python joint_monkey.py
+pkill -f eval_web_control.py
 ```
 
-Install HumanoidVerse:
+그 후 다시 실행합니다.
 
 ```bash
-# at the root of HumanoidVerse repository
-pip install -e .
+./scripts/run_demo.sh
 ```
 
-To test your installation, try a minimum working example of training locomotion task in IsaacGym:
+### 2. checkpoint를 찾지 못하는 경우
+
+다음 명령으로 checkpoint가 존재하는지 확인합니다.
 
 ```bash
-python humanoidverse/train_agent.py \
-+simulator=isaacgym \
-+exp=locomotion \
-+domain_rand=NO_domain_rand \
-+rewards=loco/reward_h1_locomotion \
-+robot=h1/h1_10dof \
-+terrain=terrain_locomotion_plane \
-+obs=loco/leggedloco_obs_singlestep_withlinvel \
-num_envs=1 \
-project_name=TESTInstallation \
-experiment_name=H110dof_loco_IsaacGym \
-headless=False
+find logs/H1_E2E -name "model_*.pt" | sort -V
 ```
 
-Then you should see:
-<img src="assets/isaacgym_test.gif" width="800px"/>
+`model_*.pt` 파일이 존재해야 데모를 실행할 수 있습니다.
 
-</details>
+### 3. Genesis Viewer가 뜨지 않는 경우
 
-## IsaacSim
-
-<details>
-<summary>Environment Setup for IsaacSim Simulator.</summary>
-
-Clone the repository from source:
+WSL2, NVIDIA Driver, OpenGL 환경 문제일 수 있습니다. 다음 명령으로 GPU가 인식되는지 확인합니다.
 
 ```bash
-git clone git@github.com:LeCAR-Lab/HumanoidVerse.git
-cd HumanoidVerse
+nvidia-smi
 ```
 
-Create a virtual environment with python 3.10.
+WSL에서 GUI 앱 실행이 가능한지도 확인합니다.
 
 ```bash
-mamba create -n hsim python=3.10
-mamba activate 
+xeyes
 ```
-Install IsaacSim following instructions [here](https://isaac-sim.github.io/IsaacLab/main/source/setup/installation/binaries_installation.html#installing-isaac-sim)
 
-Install IsaacLab following instructions [here](https://isaac-sim.github.io/IsaacLab/main/source/setup/installation/binaries_installation.html#installing-isaac-lab)
+### 4. `.sh` 파일 실행 권한 오류
 
-Install HumanoidVerse:
+압축 해제 후 실행 권한이 사라질 수 있습니다. 다음 명령을 다시 실행합니다.
 
 ```bash
-pip install -e .
+chmod +x scripts/setup_env.sh scripts/run_demo.sh
 ```
 
-To test your installation, try a minimum working example of training locomotion task in IsaacSim:
+### 5. Conda 환경 이름을 바꾸고 싶은 경우
+
+기본 환경 이름은 `hgen`입니다. 다른 이름을 사용하려면 설치와 실행 모두 같은 이름을 지정해야 합니다.
 
 ```bash
-python humanoidverse/train_agent.py \
-+simulator=isaacsim \
-+exp=locomotion \
-+domain_rand=NO_domain_rand \
-+rewards=loco/reward_h1_locomotion \
-+robot=h1/h1_10dof \
-+terrain=terrain_locomotion_plane \
-+obs=loco/leggedloco_obs_singlestep_withlinvel \
-num_envs=1 \
-project_name=TESTInstallation \
-experiment_name=H110dof_loco_IsaacSim \
-headless=False
+ENV_NAME=hgen_submit_test ./scripts/setup_env.sh
+ENV_NAME=hgen_submit_test ./scripts/run_demo.sh
 ```
 
-Then you should see:
-<img src="assets/isaacsim_test.gif" width="800px"/>
+---
 
-</details>
+## 13. 실행 요약
 
-## Genesis
-
-<details>
-<summary>Environment Setup for Genesis Simulator.</summary>
-
-Clone the repository from source:
+처음 실행 시:
 
 ```bash
-git clone git@github.com:LeCAR-Lab/HumanoidVerse.git
-cd HumanoidVerse
+cd HumanoidVerse_submit_clean
+chmod +x scripts/setup_env.sh scripts/run_demo.sh
+./scripts/setup_env.sh
+./scripts/run_demo.sh
 ```
 
-Create a virtual environment with python 3.10.
+웹 패널 접속:
 
-```bash
-mamba create -n hgen python=3.10
-mamba activate hgen
-```
-Install `Genesis`. Note that `Genesis` simulator is still under development, and some functions such as the built-in `recording` is not stable.
-
-```bash
-pip install torch
-pip install genesis-world==0.2.1
+```text
+http://localhost:8080
 ```
 
-Install HumanoidVerse:
+---
 
-```bash
-pip install -e .
-```
-To test your installation, try a minimum working example of training locomotion task in Genesis:
+## 14. 제출물 설명
 
-```bash
-python humanoidverse/train_agent.py \
-+simulator=genesis \
-+exp=locomotion \
-+domain_rand=NO_domain_rand \
-+rewards=loco/reward_h1_locomotion \
-+robot=h1/h1_10dof \
-+terrain=terrain_locomotion_plane \
-+obs=loco/leggedloco_obs_singlestep_withlinvel \
-num_envs=1 \
-project_name=TESTInstallation \
-experiment_name=H110dof_loco_Genesis \
-headless=False
-```
+본 제출물은 학습된 정책 기반의 H1 10DoF 휴머노이드 목표 도달 및 장애물 회피 데모입니다.
 
-Then you should see:
-<img src="assets/genesis_test.gif" width="800px"/>
-
-</details>
-
-
-# Training & Evaluation
-We support training & evluating in multiple simulators: `IsaacGym`, `IsaacSim` and `Genesis` by changing only **ONE** command line: `+simulator=<simulator_name>`
-## Policy Training
-To train your policy, follow this command format:
-```bash
-python humanoidverse/train_agent.py \
-+simulator=<simulator_name> \
-+exp=<task_name> \
-+domain_rand=<domain_randomization> \
-+rewards=<reward_function> \
-+robot=<robot_name> \
-+terrain=<terrain_name> \
-+obs=<observation_name> \
-num_envs=<num_envs> \
-project_name=<project_name> \
-experiment_name=<experiment_name> \
-headless=<headless_mode>
-```
-<details>
-<summary>(Optional) By default, the training process is logged by tensorboard. You can also use `wandb` for logging.</summary>
-
-If you want to use `wandb` for logging, you can add `+opt=wandb` in the command.
-
-```bash
-python humanoidverse/train_agent.py \
-+simulator=isaacgym \
-+exp=locomotion \
-+domain_rand=NO_domain_rand \
-+rewards=loco/reward_h1_locomotion \
-+robot=h1/h1_10dof \
-+terrain=terrain_locomotion_plane \
-+obs=loco/leggedloco_obs_singlestep_withlinvel \
-num_envs=4096 \
-project_name=HumanoidLocomotion \
-experiment_name=H110dof_loco_IsaacGym \
-headless=True \
-+opt=wandb
-```
-</details>
-
-## Policy Evaluation
-
-After running the training command, you can find the checkpoints and log files in the `logs/<project_name>/<timestamp>-_<experiment_name>-<exp_type>-<robot_type>` directory.
-
-To evaluate the policy, follow this command format:
-
-```bash
-python humanoidverse/eval_agent.py +checkpoint=logs/xxx/../xx.pt
-```
-
-`logs/xxx/../xx.pt` is the relative path to the checkpoint file. You only need to run this command, our script will automatically find and load the training config.
-
-<details>
-<summary>If you want to override some of the training config, you can use `+` to override the configs.</summary>
-
-```bash
-python humanoidverse/eval_agent.py +checkpoint=logs/xxx/../xx.pt \
-+domain_rand.push_robots=True \
-+simulator=genesis # you can load the policy trained in isaacgym
-```
-</details>
-
-# Start Training Your Humanoids!
-
-Here are some starting commands to train & evaluate the locomotion policy on Unitree H1 Humanoid Robot among multiple simulators.
-
-## IsaacGym
-<details>
-<summary>Training Command</summary>
-
-```bash
-python humanoidverse/train_agent.py \
-+simulator=isaacgym \
-+exp=locomotion \
-+domain_rand=NO_domain_rand \
-+rewards=loco/reward_h1_locomotion \
-+robot=h1/h1_10dof \
-+terrain=terrain_locomotion_plane \
-+obs=loco/leggedloco_obs_singlestep_withlinvel \
-num_envs=4096 \
-project_name=HumanoidLocomotion \
-experiment_name=H110dof_loco_IsaacGym \
-headless=True
-```
-</details>
-
-After around 3000 epochs, evaluating in `IsaacGym` and `Genesis`:
-<table>
-  <tr>
-    <td style="text-align: center;">
-      <img src="assets/isaacgym_issacgym.gif" style="width: 100%;"/>
-    </td>
-    <td style="text-align: center;">
-      <img src="assets/isaacgym_genesis.gif" style="width: 100%;"/>
-    </td>
-  </tr>
-</table>
-
-
-## IsaacSim
-<details>
-<summary>Training Command</summary>
-
-```bash
-python humanoidverse/train_agent.py \
-+simulator=isaacsim \
-+exp=locomotion \
-+domain_rand=NO_domain_rand \
-+rewards=loco/reward_h1_locomotion \
-+robot=h1/h1 \
-+terrain=terrain_locomotion_plane \
-+obs=loco/leggedloco_obs_singlestep_withlinvel \
-num_envs=4096 \
-project_name=HumanoidLocomotion \
-experiment_name=H119dof_loco_IsaacSim \
-headless=True
-```
-</details>
-
-After around 3000 epochs, evaluating in `IsaacSim` and `Genesis`:
-
-<table>
-  <tr>
-    <td style="text-align: center;">
-      <img src="assets/isaacsim_isaacsim.gif" style="width: 100%;"/>
-    </td>
-    <td style="text-align: center;">
-      <img src="assets/isaacsim_genesis.gif" style="width: 100%;"/>
-    </td>
-  </tr>
-</table>
-
-## Genesis
-<details>
-<summary>Training Command</summary>
-
-```bash
-python humanoidverse/train_agent.py \
-+simulator=genesis \
-+exp=locomotion \
-+domain_rand=NO_domain_rand \
-+rewards=loco/reward_h1_locomotion \
-+robot=h1/h1_10dof \
-+terrain=terrain_locomotion_plane \
-+obs=loco/leggedloco_obs_singlestep_withlinvel \
-num_envs=4096 \
-project_name=HumanoidLocomotion \
-experiment_name=H110dof_loco_Genesis \
-headless=True \
-rewards.reward_penalty_curriculum=True \
-rewards.reward_initial_penalty_scale=0.5
-```
-</details>
-
-After around 5000 epochs, evaluating in `Genesis` and `IsaacGym`:
-
-<table>
-  <tr>
-    <td style="text-align: center;">
-      <img src="assets/genesis_genesis.gif" style="width: 100%;"/>
-    </td>
-    <td style="text-align: center;">
-      <img src="assets/genesis_isaacgym.gif" style="width: 100%;"/>
-    </td>
-  </tr>
-</table>
-
-# References and Acknowledgements
-
-This project is inspired by the following projects:
-
-- [ProtoMotions](https://github.com/NVlabs/ProtoMotions) inspired us to use `hydra` for configuration management and influenced the overall structure of the codebase.
-- [Legged Gym](https://github.com/leggedrobotics/legged_gym) provided the reference code for training locomotion tasks, handling domain randomizations, and designing reward functions. The starting point of our codebase is `git clone git@github.com:leggedrobotics/legged_gym.git`.
-- [RSL RL](https://github.com/leggedrobotics/rsl_rl) provided an example for the implementation of the PPO algorithm.
-
-This project is made possible thanks to our amazing team members at [LeCAR Lab](https://lecar-lab.github.io/):
-- [Gao Jiawei](https://gao-jiawei.com/) led the development of this project, designed the overall architecture, and implemented the core components, including the simulators, robots, tasks, and the training and evaluation framework. 
-- [Tairan He](https://tairanhe.com/) implemented the design of domain randomizations, integrated the IsaacSim simulator (together with Zi Wang), and helped significantly with debugging in the early stages of the project.
-- [Wenli Xiao](https://wenlixiao-cs.github.io/) implemented the design of the observation dictionary, proprioception configuration, and history handlers, designed the actor-critic network architecture in PPO, and also helped greatly with debugging in the early stages of the project.
-- [Yuanhang Zhang](https://hang0610.github.io/) contributed significantly to the sim-to-sim and sim-to-real pipelines and helped with debugging our PPO implementation.
-- [Zi Wang](https://www.linkedin.com/in/zi-wang-b675aa236/) integrated the IsaacSim simulator into HumanoidVerse.
-- [Ziyan Xiong](https://ziyanx02.github.io/) integrated the Genesis simulator into HumanoidVerse.
-- [Haotian Lin](https://www.linkedin.com/in/haotian-lin-9b29b7324/) implemented MPPI in HumanoidVerse (to be released soon).
-- [Zeji Yi](https://iscoyizj.github.io/) and [Chaoyi Pan](https://panchaoyi.com/) provided crucial help with our sim-to-sim pipeline in the early stages of the project.
-
-Special thanks to [Guanya Shi](https://www.gshi.me/) for his invaluable support and unwavering guidance throughout the project.
-
-# Citation
-Please use the following bibtex if you find this repo helpful and would like to cite:
-
-```bibtex
-@misc{HumanoidVerse,
-  author = {CMU LeCAR Lab},
-  title = {HumanoidVerse: A Multi-Simulator Framework for Humanoid Robot Sim-to-Real Learning},
-  year = {2025},
-  publisher = {GitHub},
-  journal = {GitHub repository},
-  howpublished = {\url{https://github.com/LeCAR-Lab/HumanoidVerse}},
-}
-```
-
-# License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+`setup_env.sh`를 통해 실행 환경을 구성하고, `run_demo.sh`를 통해 Genesis Viewer와 웹 컨트롤 패널을 실행할 수 있습니다.

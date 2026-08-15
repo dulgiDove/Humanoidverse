@@ -4,7 +4,7 @@ algo:
   _target_: humanoidverse.agents.ppo.ppo.PPO
   _recursive_: False
   config:
-    num_learning_epochs: 5
+    num_learning_epochs: 10
     num_mini_batches: 4
     clip_param: 0.2
     gamma: 0.99
