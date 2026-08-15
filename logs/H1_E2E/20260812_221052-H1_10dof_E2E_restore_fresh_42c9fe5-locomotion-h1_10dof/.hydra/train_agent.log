@@ -1,0 +1,17 @@
+[2026-08-12 22:10:55,476][OpenGL.acceleratesupport][INFO] - No OpenGL_accelerate module loaded: No module named 'OpenGL_accelerate'
+[2026-08-12 22:10:55,883][genesis][INFO] - ~<╭─────────────────────────────────────────────────────────────────────────────────────╮>~
+[2026-08-12 22:10:55,883][genesis][INFO] - ~<│┈┉┈┉┈┉┈┉┈┉┈┉┈┉┈┉┈┉┈┉┈┉┈┉┈┉┈┉┈┉┈┉┈┉┈┉┈┉>~ ~~~~<Genesis>~~~~ ~<┈┉┈┉┈┉┈┉┈┉┈┉┈┉┈┉┈┉┈┉┈┉┈┉┈┉┈┉┈┉┈┉┈┉┈┉┈┉│>~
+[2026-08-12 22:10:55,883][genesis][INFO] - ~<╰─────────────────────────────────────────────────────────────────────────────────────╯>~
+[2026-08-12 22:10:55,885][genesis][INFO] - Running on ~~<[NVIDIA GeForce RTX 4060 Ti]>~~ with backend ~~<gs.cuda>~~. Device memory: ~~<8.00>~~ GB.
+[2026-08-12 22:10:56,140][genesis][INFO] - 🚀 Genesis initialized. 🔖 version: ~~<0.2.1>~~, 🌱 seed: ~~<None>~~, 📏 precision: '~~<32>~~', 🐛 debug: ~~<False>~~, 🎨 theme: '~~<dark>~~'.
+[2026-08-12 22:10:56,313][genesis][INFO] - Scene ~~~<<1f49a8b>>~~~ created.
+[2026-08-12 22:10:56,313][genesis][INFO] - Adding ~<<gs.RigidEntity>>~. idx: ~<0>~, uid: ~~~<<16f4a4b>>~~~, morph: ~<<gs.morphs.Plane>>~, material: ~<<gs.materials.Rigid>>~.
+[2026-08-12 22:10:56,331][genesis][INFO] - Adding ~<<gs.RigidEntity>>~. idx: ~<1>~, uid: ~~~<<794e810>>~~~, morph: ~<<gs.morphs.URDF(file='/home/dulgi/projects/HumanoidVerse/humanoidverse/data/robots/h1/h1_10dof.urdf')>>~, material: ~<<gs.materials.Rigid>>~.
+[2026-08-12 22:10:56,949][genesis][INFO] - Adding ~<<gs.RigidEntity>>~. idx: ~<2>~, uid: ~~~<<61061de>>~~~, morph: ~<<gs.morphs.Cylinder>>~, material: ~<<gs.materials.Rigid>>~.
+[2026-08-12 22:10:56,951][genesis][INFO] - Adding ~<<gs.RigidEntity>>~. idx: ~<3>~, uid: ~~~<<b52da49>>~~~, morph: ~<<gs.morphs.Cylinder>>~, material: ~<<gs.materials.Rigid>>~.
+[2026-08-12 22:10:56,954][genesis][INFO] - Adding ~<<gs.RigidEntity>>~. idx: ~<4>~, uid: ~~~<<f7d923e>>~~~, morph: ~<<gs.morphs.Cylinder>>~, material: ~<<gs.materials.Rigid>>~.
+[2026-08-12 22:10:56,957][genesis][INFO] - Adding ~<<gs.RigidEntity>>~. idx: ~<5>~, uid: ~~~<<a5c4050>>~~~, morph: ~<<gs.morphs.Sphere>>~, material: ~<<gs.materials.Rigid>>~.
+[2026-08-12 22:10:56,961][genesis][INFO] - Building scene ~~~<<1f49a8b>>~~~...
+[2026-08-12 22:10:59,758][genesis][INFO] - Compiling simulation kernels...
+[2026-08-12 22:11:02,897][genesis][INFO] - Building visualizer...
+[2026-08-13 05:23:07,584][genesis][INFO] - 💤 Exiting Genesis and caching compiled kernels...

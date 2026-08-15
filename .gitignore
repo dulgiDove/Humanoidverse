@@ -69,3 +69,10 @@ exported/
 
 # Genesis 캐시
 genesis_cache/
+# Submission files
+!scripts/
+!scripts/*.sh
+
+!logs/
+!logs/H1_E2E/
+!logs/H1_E2E/**
