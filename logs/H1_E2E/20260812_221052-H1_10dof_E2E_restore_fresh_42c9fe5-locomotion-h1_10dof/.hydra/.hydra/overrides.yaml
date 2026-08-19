@@ -1,0 +1,12 @@
+- +simulator=genesis
+- +exp=locomotion
+- +domain_rand=NO_domain_rand
+- +rewards=loco/reward_h1_locomotion
+- +robot=h1/h1_10dof
+- +terrain=terrain_locomotion_plane
+- +obs=loco/leggedloco_obs_singlestep_withlinvel
+- num_envs=512
+- project_name=H1_E2E
+- experiment_name=H1_10dof_E2E_restore_fresh_42c9fe5
+- headless=True
+- rewards.reward_penalty_curriculum=False
