@@ -67,16 +67,13 @@ class LeggedRobotLocomotion(LeggedRobotBase):
         self.curriculum_check_interval = 1000  # 1000 에피소드마다 판단
         self.curriculum_threshold = 0.70       # 성공률 기준
 
-        # ── [스타일 보상] mocap reference motion 로드 (클립 단위, 2026.07.20 수정) ──
-        # 기존 cmu_walk_h1.npy는 서로 다른 사람의 걷기 클립을 그냥 이어붙인 형태라
-        # 클립 경계에서 관절 각도가 순간이동하듯 튀는 문제가 있었음 (46곳 발견).
-        # cmu_walk_h1_full19_clips.npz: clips(num_clips, max_len, 19) + lengths(num_clips,)
-        # 2026.07.21: 하체10 + 상체9(토르소, 양쪽 어깨3축, 팔꿈치) = 19 DOF로 확장
+        # ── [스타일 보상] LAFAN1 BVH IK reference motion 로드 ──
+        # lafan1_walk_h1_ik.npz: clips(1443, 200, 19) + lengths(1443,)
+        # walk1~4 시퀀스 12개 BVH → FK → 해석적 IK → 50Hz 리샘플링
         # 에피소드마다 클립 하나를 랜덤하게 골라, 그 클립 안에서만 위상이 순환하도록 함
-        # (클립 간 순간이동 없음)
         _motion_path = os.path.join(
-            os.path.dirname(__file__),          # envs/locomotion/
-            "..", "..", "data", "motions", "cmu_walk_h1_full19_clips.npz"
+            os.path.dirname(__file__),
+            "..", "..", "data", "motions", "lafan1_walk_h1_ik.npz"
         )
         _motion_path = os.path.normpath(_motion_path)
         if os.path.exists(_motion_path):
