@@ -32,7 +32,7 @@ from scipy.spatial.transform import Rotation
 
 # ─── 경로 ────────────────────────────────────────────────────────
 REPO_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
-BVH_DIR   = "/mnt/c/Users/jayelle/lafan1_bvh"
+BVH_DIR   = os.path.join(REPO_ROOT, "humanoidverse", "data", "lafan1_bvh")
 OUT_PATH  = os.path.join(REPO_ROOT, "humanoidverse", "data", "motions",
                          "lafan1_walk_h1_ik.npz")
 

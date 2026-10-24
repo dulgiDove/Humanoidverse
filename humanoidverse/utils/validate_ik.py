@@ -113,7 +113,8 @@ def ik_from_positions(p_hip, p_knee, p_ankle, R_pelvis):
 
 
 def main():
-    csv_path = "/mnt/c/Users/jayelle/lafan1_hf/h1/walk1_subject1.csv"
+    _repo_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
+    csv_path = os.path.join(_repo_root, "humanoidverse", "data", "lafan1_hf", "h1", "walk1_subject1.csv")
     data = np.loadtxt(csv_path, delimiter=',', dtype=np.float32)
     # [0:7] root_joint, [7:26] H1 19-DOF
     angles = data[:, 7:]   # (T, 19)

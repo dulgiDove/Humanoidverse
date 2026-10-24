@@ -157,43 +157,51 @@ class Genesis(BaseSimulator):
         """
         # build
         self.num_envs = num_envs
-        self.cam = self.scene.add_camera(
-            res=(1280, 720),
-            pos=(3.0, -3.0, 2.5),
-            lookat=(0.0, 0.0, 0.8),
-            fov=40,
-            GUI=False,
-        )
 
-        # 장애물 시각화 마커 (빨간 원통) - 이미 있는 obstacles와 별도로 시각 전용
-        self.obstacle_markers = []
-        for i in range(3):
-            marker = self.scene.add_entity(
-                gs.morphs.Cylinder(
-                    radius=0.31,
-                    height=1.52,
-                    pos=(999.0 + i, 999.0, 0.76),
+        # 카메라/시각화 마커는 eval·녹화(num_envs==1)에서만 실제로 쓰인다
+        # (locomotion.py의 set_pos 호출들도 전부 num_envs==1 가드 안에 있음).
+        # 다중 환경 학습에서는 전혀 안 쓰이는데도 카메라를 만들면 pyrender
+        # offscreen 렌더 파이프라인이 초기화되면서 scene.build() 안에서
+        # 첫 렌더를 시도하다가 멈추는 문제가 있어(py-spy로 확인, 2026.09.21),
+        # 학습 시에는 아예 만들지 않도록 건너뛴다.
+        if num_envs == 1:
+            self.cam = self.scene.add_camera(
+                res=(1280, 720),
+                pos=(3.0, -3.0, 2.5),
+                lookat=(0.0, 0.0, 0.8),
+                fov=40,
+                GUI=False,
+            )
+
+            # 장애물 시각화 마커 (빨간 원통) - 이미 있는 obstacles와 별도로 시각 전용
+            self.obstacle_markers = []
+            for i in range(3):
+                marker = self.scene.add_entity(
+                    gs.morphs.Cylinder(
+                        radius=0.31,
+                        height=1.52,
+                        pos=(999.0 + i, 999.0, 0.76),
+                        fixed=True,
+                        collision=False,  # 물리 충돌 없음, 시각만
+                    ),
+                    surface=gs.surfaces.Default(
+                        color=(1.0, 0.2, 0.2, 0.7),  # 빨강, 반투명
+                    ),
+                )
+                self.obstacle_markers.append(marker)
+
+            # 목표 위치 마커 (초록 구)
+            self.target_marker = self.scene.add_entity(
+                gs.morphs.Sphere(
+                    radius=0.3,
+                    pos=(999.0, 999.0, 0.3),
                     fixed=True,
-                    collision=False,  # 물리 충돌 없음, 시각만
+                    collision=False,
                 ),
                 surface=gs.surfaces.Default(
-                    color=(1.0, 0.2, 0.2, 0.7),  # 빨강, 반투명
+                    color=(0.2, 1.0, 0.2, 0.8),  # 초록
                 ),
             )
-            self.obstacle_markers.append(marker)
-
-        # 목표 위치 마커 (초록 구)
-        self.target_marker = self.scene.add_entity(
-            gs.morphs.Sphere(
-                radius=0.3,
-                pos=(999.0, 999.0, 0.3),
-                fixed=True,
-                collision=False,
-            ),
-            surface=gs.surfaces.Default(
-                color=(0.2, 1.0, 0.2, 0.8),  # 초록
-            ),
-        )
 
         self.scene.build(n_envs=num_envs)
         self.env_origins = env_origins

@@ -444,9 +444,15 @@ class LeggedRobotLocomotion(LeggedRobotBase):
         return (pos_reached & ~stable_goal_mask).float()
 
     def _reward_penalty_speed_limit(self):
-        """현재는 scale 0으로 둔다. 필요 시 속도 상한 실험용으로만 사용."""
+        """
+        [2026.08.28] AMP가 관절 위치(dof_pos)만 보고 속도/타이밍은 안 보기 때문에,
+        정책이 LAFAN1 참조 데이터(실측 평균 0.42~0.76 m/s, 느린 걷기)보다 훨씬 빠른
+        속도(실측 1.06 m/s)로 같은 걷기 자세 시퀀스를 재생해도 discriminator가 못 잡아냄
+        -> 뛰는 것처럼 보이는 원인. speed_limit을 참조 속도 근처로 낮추고 scale을 켜서
+        직접 속도를 제한.
+        """
         speed_xy = torch.norm(self.base_lin_vel[:, :2], dim=1)
-        speed_limit = 1.5
+        speed_limit = getattr(self.config.rewards, "speed_limit_mps", 1.5)
         excess_speed = torch.clamp(speed_xy - speed_limit, min=0.0)
         return excess_speed ** 2
 
@@ -563,6 +569,26 @@ class LeggedRobotLocomotion(LeggedRobotBase):
             - self.default_dof_pos[:, self.upper_dof_indices])
         return torch.sum(deviation, dim=1)
 
+    def _reward_penalty_torso_twist(self):
+        """
+        [2026.08.30] 다리/골반 방향 대비 상체(torso_joint)가 평균 3~8.5도 정도 오른쪽으로
+        돌아가 있는 걸 실제 롤아웃에서 확인함. upperbody_joint_angle_freeze는 팔 4개+torso
+        편차를 다 합쳐서 하나의 스케일로 벌점을 주는데, 팔은 원래 크게 흔들려서(자연스러운
+        스윙) 그 합 안에서 torso의 작은 편차가 묻힘 -> torso만 따로 떼서 0으로 당기는
+        전용 보상 추가.
+
+        [2026.09.02 버그 수정] h1_10dof(하체 전용, torso_joint 없음) 로봇 config로 이
+        보상 함수를 그대로 쓰면 dof_names.index('torso_joint')가 못 찾아서 에러남
+        (teammate 시각화 데모 스크립트에서 발견). 다른 상체 전용 보상(upperbody_joint_
+        angle_freeze)처럼 has_upper_body_dof를 먼저 체크하도록 방어 코드 추가.
+        """
+        if not self.config.robot.get("has_upper_body_dof", False):
+            return torch.zeros(self.num_envs, device=self.device)
+        torso_idx = list(self.dof_names).index('torso_joint')
+        return torch.square(
+            self.simulator.dof_pos[:, torso_idx] - self.default_dof_pos[:, torso_idx]
+        )
+
     ######################### Observations #########################
 
     # ── E2E: goal_direction / goal_distance로 교체 ──
@@ -623,28 +649,60 @@ class LeggedRobotLocomotion(LeggedRobotBase):
     def _get_obs_lidar_scan(self):
         return self._compute_lidar_scan() / self.lidar_max_range
 
-    def _reward_penalty_obstacle_collision(self):
-        robot_xy = self.simulator.robot_root_states[:, :2]
+    def _min_dist_to_obstacles(self, full_body: bool = True):
+        """로봇과 장애물 중심 사이 최소 XY 거리.
+
+        [2026.10.03] 기존엔 robot_root_states(골반 중심)만 봐서, 팔/무릎이 장애물을
+        파고들어도 골반만 0.6m 밖에 있으면 충돌로 안 잡히는 문제가 있었음
+        (영상으로 직접 확인). full_body=True면 전신 링크(_rigid_body_pos, 팔다리 다
+        포함) 기준으로 가장 가까운 부위를 본다.
+        """
+        if full_body:
+            # (num_envs, num_bodies, 2)
+            body_xy = self.simulator._rigid_body_pos[:, :, :2]
+        else:
+            body_xy = self.simulator.robot_root_states[:, :2].unsqueeze(1)
+
         min_dist = torch.full((self.num_envs,), self.lidar_max_range, device=self.device)
         for i in range(3):
-            d = torch.norm(robot_xy - self.obstacle_pos[:, i], dim=1)
-            min_dist = torch.minimum(min_dist, d)
-        return (min_dist < self.obstacle_radius + 0.3).float()
+            obs_xy = self.obstacle_pos[:, i].unsqueeze(1)  # (num_envs, 1, 2)
+            d = torch.norm(body_xy - obs_xy, dim=2)  # (num_envs, num_bodies)
+            min_dist = torch.minimum(min_dist, d.min(dim=1).values)
+        return min_dist
+
+    def _update_reset_buf(self):
+        """(실험 A) 장애물 충돌 시 즉시 에피소드를 종료한다. config.termination.terminate_by_obstacle_collision=True일 때만 동작.
+
+        장애물은 물리 충돌이 없는(collision=False) 시각 전용 오브젝트라, 이전에는
+        스쳐 지나가도 순간 페널티만 받고 계속 진행이 가능했다. 그래서 크게 돌아가는
+        것보다 살짝 스치고 지나가는 게 총 보상 관점에서 더 유리해지는 경우가 생겨,
+        피할 공간이 충분한데도 뚫고 지나가는 행동이 나왔다 (2026.09.04).
+        """
+        super()._update_reset_buf()
+        if not self.config.termination.get("terminate_by_obstacle_collision", False):
+            return
+        min_dist = self._min_dist_to_obstacles(full_body=True)
+        # 전신 링크는 골반보다 훨씬 얇아서 margin도 0.3 -> 0.15로 줄임 (2026.10.03)
+        self.reset_buf |= min_dist < (self.obstacle_radius + 0.15)
+
+    def _reward_penalty_obstacle_collision(self):
+        min_dist = self._min_dist_to_obstacles(full_body=True)
+        return (min_dist < self.obstacle_radius + 0.15).float()
 
     def _reward_penalty_obstacle_proximity(self):
-        """충돌 전부터 장애물에 가까워지는 행동을 약하게 벌점화한다.
+        """(실험 C) 충돌 전부터 장애물에 가까워지는 행동을 약하게 벌점화한다.
 
         collision penalty만 있으면 PPO는 실제로 부딪힐 때까지 회피 신호를 거의 받지 못한다.
-        이 함수는 obstacle_radius+1.0m 안쪽으로 들어오면 0~1 사이의 soft penalty를 준다.
-        YAML에서 음수 scale을 붙여 사용한다.
+        이 함수는 obstacle_radius + safe_margin_extra(기본 1.0m) 안쪽으로 들어오면
+        0~1 사이의 soft penalty를 준다. YAML에서 음수 scale을 붙여 사용한다.
+        safe_margin_extra는 rewards.obstacle_safe_margin_extra로 실험별 override 가능
+        (2026.09.04, 회피 공간이 충분한데도 스치듯 통과하는 문제 대응 A/B/C 실험용).
+        [2026.10.03] 판정 기준을 골반 중심 -> 전신 링크(팔/무릎 포함) 최소거리로 변경.
         """
-        robot_xy = self.simulator.robot_root_states[:, :2]
-        min_dist = torch.full((self.num_envs,), self.lidar_max_range, device=self.device)
-        for i in range(3):
-            d = torch.norm(robot_xy - self.obstacle_pos[:, i], dim=1)
-            min_dist = torch.minimum(min_dist, d)
+        min_dist = self._min_dist_to_obstacles(full_body=True)
 
-        collision_margin = self.obstacle_radius + 0.3
-        safe_margin = self.obstacle_radius + 1.0
+        collision_margin = self.obstacle_radius + 0.15
+        margin_extra = float(getattr(self.config.rewards, "obstacle_safe_margin_extra", 1.0))
+        safe_margin = self.obstacle_radius + margin_extra
         proximity = (safe_margin - min_dist) / (safe_margin - collision_margin)
         return torch.clamp(proximity, min=0.0, max=1.0) ** 2

@@ -28,11 +28,38 @@ algo:
     eval_callbacks: null
 
     # AMP 전용 설정
+    # [2026.08.23] disc_loss가 24h+ 학습 후반 다시 0.0005까지 붕괴하는 문제 확인
+    # (discriminator가 정책을 압도적으로 이겨 AMP 보상이 사실상 상수 0에 가까워짐).
+    # AMP 논문(Peng et al. 2021)/IsaacGymEnvs 구현 대조 후 grad_penalty_coef를 논문 값(10)
+    # 으로 올리고, logit_reg/weight_decay/replay_buffer/disc_grad_norm을 추가.
+    #
+    # [2026.08.24 과다 정규화로 인한 반대 방향 실패 확인] 위 설정으로 19500 iteration
+    # 돌린 뒤 진짜 참조 모션과 "완전 무작위 관절 노이즈"를 discriminator에 넣어 직접
+    # 비교해보니 D 점수가 거의 동일(real 0.39 vs 무작위노이즈 0.41, AMP 보상 0.88 vs 0.80)
+    # 했음 -> discriminator가 real/fake를 전혀 구분 못 하는 상태로 학습이 멈춰있었음.
+    # IsaacGymEnvs는 훨씬 큰 네트워크(1024,512)와 고차원 관측(회전 6D 표현 등)에 맞춰
+    # 튜닝된 계수라, 우리처럼 훨씬 작은 네트워크(256,128)/저차원 입력(38)에는 같은 절대
+    # 계수가 과하게 강해서 discriminator를 거의 상수함수로 눌러버린 것으로 판단.
+    # grad_penalty_coef와 logit_reg_coef를 크게 낮춰서 재검증.
     amp:
-      amp_reward_weight: 0.1       # AMP 보상 가중치 (기존 보상에 더해짐)
+      amp_reward_weight: 1.0       # AMP 보상 가중치 (기존 보상에 더해짐) — 체크포인트 이어받기 말고 처음부터(0부터) 검증
       disc_learning_rate: 1.e-4    # Discriminator 학습률 (policy보다 낮게)
       disc_hidden_dims: [256, 128] # Discriminator MLP 구조
-      grad_penalty_coef: 5.0       # Gradient penalty 계수
+      grad_penalty_coef: 2.0       # R1 gradient penalty 계수 (10 -> 2, 과다 정규화로 discriminator가 학습 자체를 못 하던 문제 수정)
+      logit_reg_coef: 0.01         # 마지막 레이어 가중치 L2 페널티 (0.05 -> 0.01)
+      weight_decay_coef: 0.0001    # discriminator 전체 가중치 L2 페널티 (IsaacGymEnvs 기본값, 유지)
+      disc_grad_norm: 1.0          # discriminator 전용 gradient clip norm (0.5 -> 1.0, policy와 동일하게 완화)
+      replay_buffer_size: 100000   # fake(정책) 전이 replay buffer 크기
+      replay_keep_prob: 0.1        # 매 iteration 롤아웃 중 buffer에 기록할 확률
+      # [2026.08.25] 걸음 리듬(좌우 교차) 문제의 원인이 R1 gradient penalty("real 근처
+      # gradient를 0으로 밀어서 붕괴는 막지만 미세한 리듬 구분 민감도도 죽임")인지 확인하기
+      # 위해 gp_type("r1"/"wgan")과 use_replay_buffer를 실험별로 켜고 끌 수 있게 만듦.
+      gp_type: "r1"                # "r1" (AMP 논문 방식) 또는 "wgan" (WGAN-GP식, 예전/23500 방식)
+      use_replay_buffer: True      # False면 매 iteration 롤아웃만으로 fake 배치 구성 (예전 방식)
+      # [2026.08.28] 정책이 LAFAN1 참조 걷기 속도(0.42~0.76 m/s)보다 훨씬 빠르게(1.06 m/s)
+      # 움직여도 discriminator가 못 잡아내는 문제(뛰는 것처럼 보임) 대응. AMP 논문 원래
+      # 설계대로 discriminator 입력에 관절 속도(dof_vel)도 포함시킬지 여부.
+      use_velocity: False
 
     module_dict:
       actor:

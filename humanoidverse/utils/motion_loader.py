@@ -38,7 +38,7 @@ import numpy as np
 # ── 경로 설정 ─────────────────────────────────────────────────────────────
 SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT    = os.path.join(SCRIPT_DIR, "..", "..")
-LAFAN1_H1_DIR = "/mnt/c/Users/jayelle/lafan1_hf/h1"
+LAFAN1_H1_DIR = os.path.join(REPO_ROOT, "humanoidverse", "data", "lafan1_hf", "h1")
 OUT_PATH     = os.path.join(REPO_ROOT, "humanoidverse", "data", "motions",
                              "cmu_walk_h1_full19_clips.npz")
 

@@ -32,7 +32,21 @@ rewards:
       penalty_ang_vel_xy: -1.5
       termination: -70.0
       penalty_unstable_goal: -10.0
+      # [2026.08.28] AMP가 속도/타이밍 정보 없이 관절 위치만 보다 보니, 정책이 LAFAN1
+      # 참조 걷기 속도보다 빠르게 같은 걷기 자세 시퀀스를 재생해도 안 걸림(뛰는 것처럼
+      # 보이는 원인). speed_limit(직접 속도 페널티)과 dof_vel 관측 추가 두 가지를 비교
+      # 실험한 결과, speed_limit은 속도는 줄이지만 좌우 교차 리듬을 오히려 망가뜨림
+      # (300스텝당 반전 17회->6~7회로 급감, 절뚝거리는 느낌)을 육안+정량으로 확인.
+      # dof_vel 관측 추가 쪽이 리듬을 더 잘 살려서(오히려 반전 17회로 자연스러운 기준보다
+      # 좋아짐) 그쪽으로 방향을 잡고, speed_limit은 다시 끔 (2026.08.30).
       penalty_speed_limit: 0.0
+
+      # [2026.08.30] velocity_only 버전 실제 롤아웃에서 상체(torso_joint)가 다리/골반
+      # 방향 대비 평균 3~8.5도 정도 오른쪽으로 돌아가 있는 걸 육안+정량으로 확인.
+      # upperbody_joint_angle_freeze는 팔 4개+torso 편차를 다 합쳐서 하나의 스케일로
+      # 벌점을 주는데, 팔은 원래 크게 흔들려서(자연스러운 스윙) 그 합 안에서 torso의
+      # 작은 편차가 묻힘 -> torso만 따로 떼서 0으로 당기는 전용 보상 추가.
+      penalty_torso_twist: -5.0
 
       # ── 관절 효율 ──────────────────────────────────
       penalty_torques: -0.00001
@@ -41,6 +55,10 @@ rewards:
       limits_dof_pos: -10.0
 
       # ── 장애물 안전 ────────────────────────────────
+      # [2026.09.04] 장애물은 물리 충돌이 없는 시각 전용 오브젝트라, 스치듯 지나가면
+      # 순간 페널티만 받고 계속 진행 가능했음 -> 피할 공간이 충분해도 뚫고 지나가는 행동
+      # 확인. 원인 분리를 위해 A(충돌시 종료)/B(collision 페널티 강화)/C(proximity 강화)
+      # 세 가지를 독립적으로 CLI override해서 병렬 A/B/C 실험한다. 기본값은 원래 값 유지.
       penalty_obstacle_collision: -40.0
       penalty_obstacle_proximity: -2.0
 
@@ -63,12 +81,23 @@ rewards:
 
   # [스타일 보상] 관절 각도 오차 민감도 (정상일 추가)
   # 0.5 -> 1.5: 8m 근처에서 신호가 완전히 죽는 문제 확인 후 완화 (2026.07.22)
-  style_imitation_sigma: 0.8
+  # 0.8로 되돌아가 있던 것을 재발견 (2026.08.23) — GMR 재타겟팅 데이터로 전환한
+  # style_gmr_v2 학습에서 iteration 1부터 rew_style_imitation이 계속 0으로 죽어있는 것 확인,
+  # 19-DOF 기준 sigma=0.8은 exp(-diff²/0.8)이 처음부터 언더플로우됨. 다시 1.5로 복원.
+  style_imitation_sigma: 1.5
 
   reward_limit:
     soft_dof_pos_limit: 0.9
     soft_dof_vel_limit: 0.9
     soft_torque_limit: 0.9
+
+  # [2026.08.28] LAFAN1 walk1~4 원본 BVH에서 직접 측정한 실제 걷기 속도(0.42~0.76 m/s)
+  # 보다 약간 여유를 둔 값. penalty_speed_limit 보상이 이 값을 넘는 속도에 페널티를 줌.
+  speed_limit_mps: 0.85
+
+  # [2026.09.04] penalty_obstacle_proximity의 회피 시작 거리(obstacle_radius + 이 값).
+  # 실험 C에서 CLI override로 키워서 더 먼 거리에서부터 회피 신호를 준다.
+  obstacle_safe_margin_extra: 1.0
 
   feet_height_target: 0.2
   locomotion_max_contact_force: 200.0

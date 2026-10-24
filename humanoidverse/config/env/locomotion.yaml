@@ -27,6 +27,8 @@ env:
       # terminate_by_ang_vel: False
       terminate_by_gravity: True
       terminate_by_low_height: False
+      # [2026.09.04] A/B/C 실험용 toggle. 기본 False, 실험별로 CLI override.
+      terminate_by_obstacle_collision: False
 
     termination_scales:
       termination_min_base_height : 0.3
