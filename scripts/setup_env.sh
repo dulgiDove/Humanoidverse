@@ -136,9 +136,7 @@ PY
 echo
 echo "=================================================="
 echo "[setup] done"
-echo "Next:"
-echo "  ./scripts/run_demo.sh"
-echo
-echo "For isolated test:"
-echo "  ENV_NAME=hgen_submit_test ./scripts/run_demo.sh"
+echo "To run the final demo:"
+echo "python humanoidverse/eval_web_control.py \\"
+echo "  +checkpoint=logs/LAFAN1_BVH_IK/20261003_215621-C_fullbody_collision-locomotion-h1/model_32000.pt"
 echo "=================================================="
